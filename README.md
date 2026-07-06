@@ -34,8 +34,12 @@ npm run mobile
 ## Public repository
 
 ```bash
-git clone https://github.com/zayyo/setlist-ultra.git
+git clone https://github.com/GlorbyZ/setlist-ultra.git
+cd setlist-ultra
+npm install
 ```
+
+Same distribution model as [R34 Pro](https://github.com/GlorbyZ/R34Pro): public GitHub repo, clone or download ZIP, then build/run locally.
 
 ### Android dev build
 
