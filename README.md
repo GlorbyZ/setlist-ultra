@@ -26,6 +26,17 @@ npm run ug-proxy
 npm run mobile
 ```
 
+## Download APK
+
+- **Latest cloud build:** https://expo.dev/accounts/zayyo/projects/setlist-ultra/builds
+- **Release notes:** see [RELEASE.md](RELEASE.md)
+
+## Public repository
+
+```bash
+git clone https://github.com/zayyo/setlist-ultra.git
+```
+
 ### Android dev build
 
 ```bash

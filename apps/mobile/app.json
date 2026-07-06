@@ -46,7 +46,12 @@
     "extra": {
       "googleWebClientId": "${EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID}",
       "googleAndroidClientId": "${EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID}",
-      "ugProxyUrl": "${EXPO_PUBLIC_UG_PROXY_URL}"
-    }
+      "ugProxyUrl": "${EXPO_PUBLIC_UG_PROXY_URL}",
+      "router": {},
+      "eas": {
+        "projectId": "6d749cfe-0b5d-441c-be35-941a500dcbae"
+      }
+    },
+    "owner": "zayyo"
   }
 }
