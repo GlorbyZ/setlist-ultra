@@ -1,22 +1,40 @@
 # Releases
 
-## Download the Android APK
+## Download the Android APK (GitHub — primary)
 
-### Option A — Latest EAS build (recommended)
+**Latest:** https://github.com/GlorbyZ/setlist-ultra/releases/latest
+
+Download **`setlist-ultra-android.apk`** from the release assets.
+
+### How new releases are published
+
+1. Tag a version: `git tag v0.1.0 && git push origin v0.1.0`
+2. GitHub Actions builds the APK on Ubuntu and attaches it to the GitHub Release.
+
+You can also trigger a build manually: **Actions → Android APK Release → Run workflow**.
+
+### EAS cloud build (backup)
 
 1. Open the [Expo builds page](https://expo.dev/accounts/zayyo/projects/setlist-ultra/builds)
 2. Open the latest **preview** Android build
 3. Tap **Download** to get the `.apk`
 
-### Option B — GitHub Releases
+### Build locally (Windows)
 
-When a release is published on GitHub, download `setlist-ultra-android.apk` from the **Assets** section.
+```bash
+npm run android:apk
+```
 
-### Option C — Build locally
+Requires JDK 17 and Android SDK. The build script maps drive `S:` when paths hit Windows’ 260-character limit.
+
+APK output: `releases/setlist-ultra-0.1.0-debug.apk`
+
+### Build locally (macOS / Linux)
 
 ```bash
 cd apps/mobile
-npx expo run:android --variant release
+npx expo prebuild --platform android
+cd android && ./gradlew assembleRelease
 ```
 
 APK output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
@@ -30,7 +48,7 @@ APK output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
 ## Clone source
 
 ```bash
-git clone https://github.com/zayyo/setlist-ultra.git
+git clone https://github.com/GlorbyZ/setlist-ultra.git
 cd setlist-ultra
 npm install
 ```

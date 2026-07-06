@@ -19,6 +19,9 @@ npm install
 # Copy env and add your Google Web Client ID
 cp .env.example apps/mobile/.env
 
+# Link expo-router for npm workspaces (macOS/Linux; Windows start script does this automatically)
+./apps/mobile/scripts/ensure-expo-router-link.sh
+
 # Start UG import proxy (separate terminal)
 npm run ug-proxy
 
@@ -28,8 +31,20 @@ npm run mobile
 
 ## Download APK
 
-- **Latest cloud build:** https://expo.dev/accounts/zayyo/projects/setlist-ultra/builds
-- **Release notes:** see [RELEASE.md](RELEASE.md)
+**Always on GitHub:** [Latest release](https://github.com/GlorbyZ/setlist-ultra/releases/latest) — download `setlist-ultra-android.apk`.
+
+New APKs are published automatically when a `v*` tag is pushed (see `.github/workflows/android-release.yml`).
+
+- **EAS builds (backup):** https://expo.dev/accounts/zayyo/projects/setlist-ultra/builds
+- **Release notes:** [RELEASE.md](RELEASE.md)
+
+### Build APK locally (Windows)
+
+```bash
+npm run android:apk
+```
+
+Output: `releases/setlist-ultra-0.1.0-debug.apk` (requires JDK 17 + Android SDK; script maps `S:` on Windows to avoid path-length limits).
 
 ## Public repository
 

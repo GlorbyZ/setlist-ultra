@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "expo start",
+    "start": "powershell -ExecutionPolicy Bypass -File ./scripts/ensure-expo-router-link.ps1 && expo start",
     "android": "expo run:android",
+    "android:apk": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android.ps1",
+    "android:apk:release": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android.ps1 --release",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
