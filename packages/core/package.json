@@ -1,0 +1,16 @@
+{
+  "name": "@setlist-ultra/core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tonaljs/tonal": "^4.10.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

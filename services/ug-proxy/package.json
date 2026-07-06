@@ -1,0 +1,13 @@
+{
+  "name": "ug-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --watch src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.0"
+  }
+}
