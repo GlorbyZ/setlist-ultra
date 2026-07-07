@@ -15,7 +15,7 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 import { deleteSong } from '@/src/lib/repository';
 
 export default function SongsScreen() {
-  const { songs, loading, refresh } = useLibrary();
+  const { songs, loading, error, refresh } = useLibrary();
   const router = useRouter();
   const [query, setQuery] = useState('');
 
@@ -41,7 +41,15 @@ export default function SongsScreen() {
         </Link>
       </View>
 
-      {loading ? (
+      {error ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Could not open library</Text>
+          <Text style={styles.emptyBody}>{error}</Text>
+          <Pressable style={styles.importButton} onPress={() => void refresh()}>
+            <Text style={styles.importText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} />
       ) : (
         <FlatList

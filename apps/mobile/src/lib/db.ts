@@ -9,7 +9,12 @@ export async function getDatabase() {
   if (dbInstance) return dbInstance;
 
   const sqlite = await SQLite.openDatabaseAsync('setlist-ultra.db');
-  await sqlite.execAsync(MIGRATION_SQL);
+  const statements = MIGRATION_SQL.split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const statement of statements) {
+    await sqlite.execAsync(statement);
+  }
   dbInstance = drizzle(sqlite, { schema });
   return dbInstance;
 }

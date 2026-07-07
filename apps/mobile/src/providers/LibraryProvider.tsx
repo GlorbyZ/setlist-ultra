@@ -7,6 +7,7 @@ type LibraryContextValue = {
   songs: SongRow[];
   setlists: SetlistRow[];
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
 };
 
@@ -16,16 +17,20 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [setlists, setSetlists] = useState<SetlistRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
     setLoading(true);
+    setError(null);
     try {
       await seedDemoSongIfEmpty();
       const [songRows, setlistRows] = await Promise.all([listSongs(), listSetlists()]);
       setSongs(songRows);
       setSetlists(setlistRows);
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load library';
       console.error('Library init failed:', err);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -36,8 +41,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ songs, setlists, loading, refresh }),
-    [songs, setlists, loading],
+    () => ({ songs, setlists, loading, error, refresh }),
+    [songs, setlists, loading, error],
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

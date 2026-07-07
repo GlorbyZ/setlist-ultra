@@ -36,5 +36,15 @@ config.resolver.extraNodeModules = {
   '@setlist-ultra/core': path.resolve(monorepoRoot, 'packages/core'),
   '@setlist-ultra/db': path.resolve(monorepoRoot, 'packages/db'),
 };
+// expo-sqlite web worker imports wa-sqlite.wasm
+if (!config.resolver.assetExts.includes('wasm')) {
+  config.resolver.assetExts.push('wasm');
+}
+// Gradle leaves transient android/build dirs that crash Metro's file watcher on Windows.
+config.resolver.blockList = [
+  ...(Array.isArray(config.resolver.blockList) ? config.resolver.blockList : []),
+  /[\\/]android[\\/]build[\\/].*/,
+  /[\\/]\.cxx[\\/].*/,
+];
 
 module.exports = config;
