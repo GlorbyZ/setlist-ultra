@@ -44,7 +44,9 @@ New APKs are published automatically when a `v*` tag is pushed (see `.github/wor
 npm run android:apk
 ```
 
-Output: `releases/setlist-ultra-0.1.0-debug.apk` (requires JDK 17 + Android SDK; script maps `S:` on Windows to avoid path-length limits).
+Output: `releases/setlist-ultra-android.apk` (release build with embedded JS; requires JDK 17 + Android SDK; script maps `S:` on Windows to avoid path-length limits).
+
+**Do not sideload debug APKs** — they need `npm run mobile` running on your PC.
 
 ## Public repository
 

@@ -27,7 +27,9 @@ npm run android:apk
 
 Requires JDK 17 and Android SDK. The build script maps drive `S:` when paths hit Windows’ 260-character limit.
 
-APK output: `releases/setlist-ultra-0.1.0-debug.apk`
+APK output: `releases/setlist-ultra-0.1.0-release.apk` (and `setlist-ultra-android.apk` for GitHub)
+
+**Note:** Debug APKs (`--debug`) require Metro on your PC and will not start on a phone alone. Always ship **release** builds for sideloading.
 
 ### Build locally (macOS / Linux)
 

@@ -24,6 +24,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       const [songRows, setlistRows] = await Promise.all([listSongs(), listSetlists()]);
       setSongs(songRows);
       setSetlists(setlistRows);
+    } catch (err) {
+      console.error('Library init failed:', err);
     } finally {
       setLoading(false);
     }

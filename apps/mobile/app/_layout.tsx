@@ -22,7 +22,10 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (error) throw error;
+    if (error) {
+      console.error('Font load failed:', error);
+      SplashScreen.hideAsync();
+    }
   }, [error]);
 
   useEffect(() => {
@@ -31,7 +34,7 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
+  if (!loaded && !error) {
     return null;
   }
 

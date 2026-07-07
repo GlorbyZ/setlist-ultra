@@ -39,7 +39,7 @@ if (-not (Test-Path "$buildRoot\android")) {
     Pop-Location
 }
 
-$release = $args -contains "--release"
+$release = $args -notcontains "--debug"
 $gradleTask = if ($release) { "assembleRelease" } else { "assembleDebug" }
 $variant = if ($release) { "release" } else { "debug" }
 $apkName = if ($release) { "app-release.apk" } else { "app-debug.apk" }
@@ -61,6 +61,10 @@ $releases = Join-Path $repoRoot "releases"
 New-Item -ItemType Directory -Force -Path $releases | Out-Null
 $dest = Join-Path $releases "setlist-ultra-0.1.0-$variant.apk"
 Copy-Item $apkPath $dest -Force
+$githubApk = Join-Path $releases "setlist-ultra-android.apk"
+if ($release) {
+    Copy-Item $apkPath $githubApk -Force
+}
 
 Write-Host ""
 Write-Host "APK built successfully:"
