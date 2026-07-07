@@ -1,11 +1,5 @@
 # APK downloads
 
-APK files are **not** stored in git (they are large). Download the latest build from GitHub Releases:
+APK files are **not** in git. Download from **https://github.com/GlorbyZ/setlist-ultra/releases/latest**
 
-**https://github.com/GlorbyZ/setlist-ultra/releases/latest**
-
-After building locally, copies land here as `setlist-ultra-<version>-<variant>.apk` (gitignored).
-
-```bash
-npm run android:apk
-```
+Build process: **[docs/BUILD.md](../docs/BUILD.md)**

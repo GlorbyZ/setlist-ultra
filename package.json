@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "mobile": "npm run start --workspace=mobile",
+    "mobile:clear": "npm run start:clear --workspace=mobile",
+    "preflight": "npm run preflight --workspace=mobile",
     "mobile:android": "npm run android --workspace=mobile",
     "android:apk": "npm run android:apk --workspace=mobile",
     "ug-proxy": "npm run start --workspace=ug-proxy",

@@ -13,40 +13,27 @@ Offline-first digital songbook and setlist manager for gigging musicians.
 ## Quick start
 
 ```bash
-# Install dependencies
 npm install
+cp .env.example apps/mobile/.env   # add Google client IDs
 
-# Copy env and add your Google Web Client ID
-cp .env.example apps/mobile/.env
-
-# Link expo-router for npm workspaces (macOS/Linux; Windows start script does this automatically)
-./apps/mobile/scripts/ensure-expo-router-link.sh
-
-# Start UG import proxy (separate terminal)
-npm run ug-proxy
-
-# Start mobile app
-npm run mobile
+npm run preflight                  # monorepo + Metro/Babel checks
+npm run ug-proxy                   # terminal 1 — UG import
+npm run mobile                     # terminal 2 — Expo / Metro
+# After native Gradle builds: npm run mobile:clear
 ```
+
+Full process: **[docs/BUILD.md](docs/BUILD.md)**
 
 ## Download APK
 
-**Always on GitHub:** [Latest release](https://github.com/GlorbyZ/setlist-ultra/releases/latest) — download `setlist-ultra-android.apk`.
-
-New APKs are published automatically when a `v*` tag is pushed (see `.github/workflows/android-release.yml`).
-
-- **EAS builds (backup):** https://expo.dev/accounts/zayyo/projects/setlist-ultra/builds
-- **Release notes:** [RELEASE.md](RELEASE.md)
-
-### Build APK locally (Windows)
+**Latest:** https://github.com/GlorbyZ/setlist-ultra/releases/latest — `setlist-ultra-android.apk`
 
 ```bash
-npm run android:apk
+npm run preflight && npm run typecheck   # before tagging
+git tag v0.1.3 && git push origin v0.1.3 # CI builds release APK
 ```
 
-Output: `releases/setlist-ultra-android.apk` (release build with embedded JS; requires JDK 17 + Android SDK; script maps `S:` on Windows to avoid path-length limits).
-
-**Do not sideload debug APKs** — they need `npm run mobile` running on your PC.
+See **[docs/BUILD.md](docs/BUILD.md)** for Metro dev, local builds, and smoke tests.
 
 ## Public repository
 

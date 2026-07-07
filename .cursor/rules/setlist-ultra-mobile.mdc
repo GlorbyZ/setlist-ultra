@@ -1,0 +1,30 @@
+---
+description: Metro, monorepo, and Android APK rules for Setlist Ultra mobile app
+globs: apps/mobile/**/*
+alwaysApply: false
+---
+
+# Setlist Ultra mobile
+
+Read `docs/BUILD.md` and `apps/mobile/AGENTS.md` before editing Metro, Babel, Gradle, or release scripts.
+
+## Must keep
+
+- `metro.config.js`: `extraNodeModules` for `@setlist-ultra/*`, `wasm` in `assetExts`, `blockList` for `android/build`
+- `babel.config.js`: `react-native-reanimated/plugin` as last plugin
+- Release APKs only for users (`assembleRelease`); debug APKs need Metro on the dev machine
+- Run `npm run preflight` before `expo start` or `android:apk`
+
+## Must not
+
+- Ship debug APKs to GitHub Releases
+- Run `gradlew clean` on Windows with `S:` subst paths
+- Remove expo-router junction/symlink setup without fixing root resolution
+- Commit `releases/*.apk` (CI publishes to GitHub Releases)
+
+## Release checklist
+
+1. `npm run preflight && npm run typecheck`
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Wait for CI; verify APK with embedded bundle
+4. Smoke test on device: app opens, demo song visible

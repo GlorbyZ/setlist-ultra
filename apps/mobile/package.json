@@ -4,10 +4,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "powershell -ExecutionPolicy Bypass -File ./scripts/ensure-expo-router-link.ps1 && expo start",
+    "preflight": "powershell -ExecutionPolicy Bypass -File ./scripts/preflight.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File ./scripts/preflight.ps1 && expo start",
+    "start:clear": "powershell -ExecutionPolicy Bypass -File ./scripts/preflight.ps1 && expo start --clear",
     "android": "expo run:android",
     "android:apk": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android.ps1",
     "android:apk:debug": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android.ps1 --debug",
+    "verify:apk": "powershell -ExecutionPolicy Bypass -File ./scripts/verify-apk.ps1 -ApkPath ../../releases/setlist-ultra-android.apk",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
