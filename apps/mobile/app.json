@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -31,6 +31,14 @@
       "expo-router",
       "expo-sqlite",
       "expo-secure-store",
+      "expo-document-picker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Scan paper charts into your library.",
+          "cameraPermission": "Scan paper charts into your library."
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -38,7 +46,11 @@
           "resizeMode": "contain",
           "backgroundColor": "#0f172a"
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-font",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
@@ -47,6 +59,10 @@
       "googleWebClientId": "${EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID}",
       "googleAndroidClientId": "${EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID}",
       "ugProxyUrl": "${EXPO_PUBLIC_UG_PROXY_URL}",
+      "supabaseUrl": "${EXPO_PUBLIC_SUPABASE_URL}",
+      "supabaseAnonKey": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}",
+      "managerUrl": "${EXPO_PUBLIC_MANAGER_URL}",
+      "webAppUrl": "${EXPO_PUBLIC_WEB_APP_URL}",
       "router": {},
       "eas": {
         "projectId": "6d749cfe-0b5d-441c-be35-941a500dcbae"

@@ -1,32 +1,28 @@
-import type { UgTabResponse } from '@setlist-ultra/core';
-import { getDatabase } from './db';
-import { listSongs, saveSongFromUg } from './repository';
-import { songs } from '@setlist-ultra/db';
+import { documentToChordPro, parseChordPro } from '@setlist-ultra/core';
+import { insertLibrarySong, listSongs } from './repository';
 
-const DEMO_TAB: UgTabResponse = {
-  tab: {
-    title: 'Demo Song',
-    artist_name: 'Setlist Ultra',
-    key: 'G',
-    capo: '0',
-    lines: [
-      { type: 'chords', chords: [{ note: 'G', pre_spaces: 0 }, { note: 'C', pre_spaces: 8 }] },
-      { type: 'lyric', lyric: 'Welcome to Setlist Ultra' },
-      { type: 'blank' },
-      { type: 'chords', chords: [{ note: 'D', pre_spaces: 0 }, { note: 'G', pre_spaces: 10 }] },
-      { type: 'lyric', lyric: 'Import tabs from Ultimate Guitar to get started' },
-    ],
-  },
-};
+const DEMO_CHORDPRO = `{title: Demo Song}
+{artist: Setlist Ultra}
+{key: G}
+{c: Verse}
+[G]Welcome to [C]Setlist Ultra
+[D]Import a backup or [G]search online
+`;
 
 export async function seedDemoSongIfEmpty() {
-  const existing = await listSongs();
+  const existing = await listSongs({ libraryKind: 'personal' });
   if (existing.length > 0) return;
 
-  await saveSongFromUg(DEMO_TAB, 'demo://welcome');
-}
-
-export async function resetDatabase() {
-  const db = await getDatabase();
-  await db.delete(songs);
+  const { document } = parseChordPro(DEMO_CHORDPRO);
+  await insertLibrarySong({
+    title: 'Demo Song',
+    artist: 'Setlist Ultra',
+    originalKey: 'G',
+    chordpro: documentToChordPro(document, { title: 'Demo Song', artist: 'Setlist Ultra', key: 'G' }),
+    document,
+    importSource: 'editor',
+    sourceProvider: 'manual',
+    sourceUrl: 'demo://welcome',
+    scope: { libraryKind: 'personal' },
+  });
 }

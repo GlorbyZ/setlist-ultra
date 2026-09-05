@@ -4,8 +4,9 @@ import { Text } from 'react-native';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { colors } from '@/src/theme';
 
-function TabBarIcon({ label, color }: { label: string; color: string }) {
+function TabBarIcon({ label, color }: { label: string; color: string | { toString(): string } }) {
   return <Text style={{ fontSize: 18, color: String(color) }}>{label}</Text>;
 }
 
@@ -15,30 +16,38 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerStyle: { backgroundColor: '#0f172a' },
-        headerTintColor: '#f8fafc',
-        tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b' },
+        tabBarActiveTintColor: colors.accent,
+        headerStyle: { backgroundColor: colors.panel },
+        headerTintColor: colors.text,
+        tabBarStyle: { backgroundColor: colors.panel, borderTopColor: colors.border },
+        tabBarInactiveTintColor: Colors[colorScheme ?? 'dark'].tabIconDefault,
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Songs',
-          tabBarIcon: ({ color }) => <TabBarIcon label="♪" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon label="♪" color={String(color)} />,
         }}
       />
       <Tabs.Screen
         name="sets"
         options={{
           title: 'Sets',
-          tabBarIcon: ({ color }) => <TabBarIcon label="☰" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon label="☰" color={String(color)} />,
+        }}
+      />
+      <Tabs.Screen
+        name="live"
+        options={{
+          title: 'Live',
+          tabBarIcon: ({ color }) => <TabBarIcon label="▶" color={String(color)} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <TabBarIcon label="⚙" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon label="⚙" color={String(color)} />,
         }}
       />
     </Tabs>

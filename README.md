@@ -1,69 +1,42 @@
 # Setlist Ultra
 
-Offline-first digital songbook and setlist manager for gigging musicians.
+Offline-first digital songbook for iOS, Android, and web. Songbook Pro–class Songs / Sets / Live / Editor with `.sbp` / `.sbpbackup` round-trip and an optional hosted catalog.
 
-## V1 features
+## Features
 
-- Local song library (SQLite)
-- Ultimate Guitar import via proxy
-- Chord-over-lyric viewer with live transpose and capo
-- Basic setlists
-- Google Drive connection (OAuth scaffold + folder setup)
+- One Expo 57 app: Songs, Sets, Live (autoscroll, transpose, capo), ChordPro editor
+- Import/export Songbook Pro `.sbp` (set share) and `.sbpbackup` (full library)
+- Ultimate Guitar import via proxy, ChordPro paste, camera/image scan
+- Local SQLite catalog (dedupe by content hash). Optional Supabase auth + Groups
+- HID pedal page-turns, print/PDF, LAN Manager snapshot (`npm run manager`)
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example apps/mobile/.env   # add Google client IDs
-
 npm run preflight                  # monorepo + Metro/Babel checks
-npm run ug-proxy                   # terminal 1 — UG import
+npm run ug-proxy                   # terminal 1 — UG import (optional)
 npm run mobile                     # terminal 2 — Expo / Metro
-# After native Gradle builds: npm run mobile:clear
+# Web: press w   After native Gradle builds: npm run mobile:clear
 ```
 
-Full process: **[docs/BUILD.md](docs/BUILD.md)**
+Full process: **[docs/BUILD.md](docs/BUILD.md)** · Hosted catalog: **[services/api/README.md](services/api/README.md)**
 
 ## Download APK
 
 **Latest:** https://github.com/GlorbyZ/setlist-ultra/releases/latest — `setlist-ultra-android.apk`
 
 ```bash
-npm run preflight && npm run typecheck   # before tagging
-git tag v0.1.3 && git push origin v0.1.3 # CI builds release APK
-```
-
-See **[docs/BUILD.md](docs/BUILD.md)** for Metro dev, local builds, and smoke tests.
-
-## Public repository
-
-```bash
-git clone https://github.com/GlorbyZ/setlist-ultra.git
-cd setlist-ultra
-npm install
-```
-
-Same distribution model as [R34 Pro](https://github.com/GlorbyZ/R34Pro): public GitHub repo, clone or download ZIP, then build/run locally.
-
-### Android dev build
-
-```bash
-cd apps/mobile
-npx expo run:android
+npm run preflight && npm run typecheck && npm test
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 ## Project layout
 
-- `apps/mobile` — Expo app (iOS, Android, web)
-- `packages/core` — Song AST, UG normalizer, transpose
+- `apps/mobile` — Expo Router (iOS, Android, web)
+- `packages/core` — ChordPro, SBP packer, AST, transpose
 - `packages/db` — Drizzle + SQLite schema
-- `services/ug-proxy` — Ultimate Guitar tab import API
-
-## Google Drive setup
-
-1. Enable Google Drive API in Google Cloud Console
-2. Configure OAuth consent screen (Testing mode + test users)
-3. Create Web + Android OAuth clients
-4. Add `EXPO_PUBLIC_GOOGLE_*` vars to `apps/mobile/.env`
-
-Package name: `com.setlistultra.app`
+- `packages/api` — Supabase client
+- `services/ug-proxy` — Ultimate Guitar import
+- `services/api` — Hosted SQL
+- `services/manager` — LAN Manager host

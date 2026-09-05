@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import type { SongDocument } from '@setlist-ultra/core';
 import { transposeDocument } from '@setlist-ultra/core';
@@ -9,13 +10,43 @@ type Props = {
   transpose?: number;
   capo?: number;
   hideChords?: boolean;
+  autoScrollSeconds?: number;
+  fontSize?: number;
+  onScrollBy?: (delta: number) => void;
 };
 
-export function SongViewer({ document, transpose = 0, capo = 0, hideChords = false }: Props) {
+export function SongViewer({
+  document,
+  transpose = 0,
+  capo = 0,
+  hideChords = false,
+  autoScrollSeconds,
+  fontSize = 18,
+}: Props) {
   const displayDoc = transpose === 0 ? document : transposeDocument(document, transpose);
+  const scrollRef = useRef<ScrollView>(null);
+  const [contentH, setContentH] = useState(1);
+  const [layoutH, setLayoutH] = useState(1);
+
+  useEffect(() => {
+    if (!autoScrollSeconds || autoScrollSeconds <= 0) return;
+    const max = Math.max(0, contentH - layoutH);
+    if (max <= 0) return;
+    const start = Date.now();
+    const id = setInterval(() => {
+      const t = Math.min(1, (Date.now() - start) / (autoScrollSeconds * 1000));
+      scrollRef.current?.scrollTo({ y: max * t, animated: false });
+      if (t >= 1) clearInterval(id);
+    }, 50);
+    return () => clearInterval(id);
+  }, [autoScrollSeconds, contentH, layoutH, document]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={styles.container}
+      onContentSizeChange={(_, h) => setContentH(h)}
+      onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
       {displayDoc.sections.map((section) => (
         <View key={section.id} style={styles.section}>
           {section.label ? <Text style={styles.sectionLabel}>{section.label}</Text> : null}
@@ -23,15 +54,20 @@ export function SongViewer({ document, transpose = 0, capo = 0, hideChords = fal
             if (line.kind === 'blank') {
               return <View key={line.id} style={styles.blank} />;
             }
-
             if (hideChords) {
               return (
-                <Text key={line.id} style={styles.lyricOnly}>
+                <Text key={line.id} style={[styles.lyricOnly, { fontSize, lineHeight: fontSize * 1.5 }]}>
                   {line.lyric ?? ''}
                 </Text>
               );
             }
-
+            if (section.kind === 'tab') {
+              return (
+                <Text key={line.id} style={[styles.tabLine, { fontSize: fontSize - 2 }]}>
+                  {line.lyric ?? ''}
+                </Text>
+              );
+            }
             return (
               <ChordLyricLine
                 key={line.id}
@@ -39,6 +75,7 @@ export function SongViewer({ document, transpose = 0, capo = 0, hideChords = fal
                 slots={line.slots}
                 transpose={transpose}
                 capo={capo}
+                fontSize={fontSize}
               />
             );
           })}
@@ -67,8 +104,11 @@ const styles = StyleSheet.create({
     height: 12,
   },
   lyricOnly: {
-    fontSize: 20,
-    lineHeight: 30,
     marginBottom: 12,
+  },
+  tabLine: {
+    fontFamily: 'SpaceMono',
+    color: '#94a3b8',
+    marginBottom: 2,
   },
 });

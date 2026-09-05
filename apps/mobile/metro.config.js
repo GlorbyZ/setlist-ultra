@@ -35,6 +35,7 @@ config.resolver.nodeModulesPaths = [
 config.resolver.extraNodeModules = {
   '@setlist-ultra/core': path.resolve(monorepoRoot, 'packages/core'),
   '@setlist-ultra/db': path.resolve(monorepoRoot, 'packages/db'),
+  '@setlist-ultra/api': path.resolve(monorepoRoot, 'packages/api'),
 };
 // expo-sqlite web worker imports wa-sqlite.wasm
 if (!config.resolver.assetExts.includes('wasm')) {

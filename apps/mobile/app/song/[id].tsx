@@ -1,19 +1,25 @@
-import { useLocalSearchParams } from 'expo-router';
+import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/Themed';
+import { LiveChrome } from '@/src/components/LiveChrome';
 import { SongViewer } from '@/src/components/SongViewer';
-import { getSong, parseSongDocument } from '@/src/lib/repository';
+import { getSong, parseSongDocument, patchAppState } from '@/src/lib/repository';
+import { subscribePedals } from '@/src/lib/pedals';
+import { sendMidiOnLoad } from '@/src/lib/midi';
+import { colors } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
+import { Text } from '@/components/Themed';
 
 export default function SongScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [song, setSong] = useState<SongRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [transpose, setTranspose] = useState(0);
   const [capo, setCapo] = useState(0);
   const [hideChords, setHideChords] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -22,12 +28,24 @@ export default function SongScreen() {
       const row = await getSong(id);
       setSong(row);
       setCapo(row?.capo ?? 0);
+      setTranspose(row?.keyShift ?? 0);
       setLoading(false);
+      if (row) {
+        await patchAppState({ currentSongId: row.id });
+        if (row.midiOnLoad) void sendMidiOnLoad(row.midiOnLoad);
+      }
     })();
   }, [id]);
 
+  useEffect(() => {
+    return subscribePedals((action) => {
+      if (action === 'scrollDown') setScrolling(true);
+      if (action === 'scrollUp') setScrolling(false);
+    });
+  }, []);
+
   if (loading) {
-    return <ActivityIndicator style={{ marginTop: 40 }} />;
+    return <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />;
   }
 
   if (!song) {
@@ -38,68 +56,39 @@ export default function SongScreen() {
     );
   }
 
-  const document = parseSongDocument(song);
+  const duration = song.duration2 ?? song.durationSeconds ?? 90;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{song.title}</Text>
-        <Text style={styles.meta}>
-          {song.artist}
-          {song.originalKey ? ` · Key ${song.originalKey}` : ''}
-          {transpose !== 0 ? ` · ${transpose > 0 ? '+' : ''}${transpose}` : ''}
-        </Text>
-      </View>
-
-      <View style={styles.controls}>
-        <Pressable style={styles.chip} onPress={() => setTranspose((v) => v - 1)}>
-          <Text style={styles.chipText}>-1</Text>
-        </Pressable>
-        <Pressable style={styles.chip} onPress={() => setTranspose(0)}>
-          <Text style={styles.chipText}>0</Text>
-        </Pressable>
-        <Pressable style={styles.chip} onPress={() => setTranspose((v) => v + 1)}>
-          <Text style={styles.chipText}>+1</Text>
-        </Pressable>
-        <Pressable style={styles.chip} onPress={() => setCapo((v) => Math.max(0, v - 1))}>
-          <Text style={styles.chipText}>Capo -</Text>
-        </Pressable>
-        <Pressable style={styles.chip} onPress={() => setCapo((v) => v + 1)}>
-          <Text style={styles.chipText}>Capo +</Text>
-        </Pressable>
-        <Pressable style={styles.chip} onPress={() => setHideChords((v) => !v)}>
-          <Text style={styles.chipText}>{hideChords ? 'Chords' : 'Lyrics'}</Text>
-        </Pressable>
-      </View>
-
+      <LiveChrome
+        title={song.title}
+        subtitle={`${song.artist}${song.originalKey ? ` · Key ${song.originalKey}` : ''}${
+          transpose !== 0 ? ` · ${transpose > 0 ? '+' : ''}${transpose}` : ''
+        }`}
+        extra={song.notesText || undefined}
+        onTranspose={(d) => setTranspose((v) => v + d)}
+        onCapo={(d) => setCapo((v) => Math.max(0, v + d))}
+        onToggleLyrics={() => setHideChords((v) => !v)}
+        lyricsOnly={hideChords}
+        onToggleScroll={() => setScrolling((v) => !v)}
+        scrolling={scrolling}
+        onEdit={() => router.push(`/editor/${song.id}` as Href)}
+        onPedal={(action) => {
+          if (action === 'scrollDown') setScrolling(true);
+        }}
+      />
       <SongViewer
-        document={document}
+        document={parseSongDocument(song)}
         transpose={transpose}
         capo={capo}
         hideChords={hideChords}
+        autoScrollSeconds={scrolling ? duration : undefined}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
-  title: { color: '#f8fafc', fontSize: 24, fontWeight: '800' },
-  meta: { color: '#94a3b8', marginTop: 4 },
-  controls: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  chip: {
-    backgroundColor: '#1e293b',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  chipText: { color: '#f8fafc', fontWeight: '600' },
 });

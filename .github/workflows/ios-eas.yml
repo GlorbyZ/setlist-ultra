@@ -1,0 +1,43 @@
+name: iOS IPA (EAS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS profile"
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  eas-ios:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Preflight
+        run: bash apps/mobile/scripts/preflight.sh
+
+      - name: EAS build iOS
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "No EXPO_TOKEN secret. Add an Expo access token and Apple certs, then re-run."
+            echo "Local: eas build --platform ios --profile ${{ github.event.inputs.profile }}"
+            exit 0
+          fi
+          npx eas-cli build --platform ios --profile ${{ github.event.inputs.profile }} --non-interactive --no-wait

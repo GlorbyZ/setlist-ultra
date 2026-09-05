@@ -37,6 +37,9 @@ jobs:
       - name: Preflight (monorepo + Metro/Babel invariants)
         run: bash apps/mobile/scripts/preflight.sh
 
+      - name: Core tests
+        run: npm test
+
       - name: Typecheck
         run: npm run typecheck
 

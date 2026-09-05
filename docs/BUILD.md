@@ -57,12 +57,35 @@ npm run android:apk:debug    # dev only — requires npm run mobile on PC
 
 Requires JDK 17 + Android SDK. Long paths use drive `S:` → repo root automatically.
 
+## Triple ship (Android + iOS + web)
+
+Same Expo Router app. Do not fork a separate web codebase.
+
+| Client | Command / CI | Output |
+|---|---|---|
+| Android | tag `v*` → `.github/workflows/android-release.yml` | `setlist-ultra-android.apk` |
+| Web | `.github/workflows/web-export.yml` on `main` / `v*` | artifact `setlist-ultra-web` (`expo export --platform web`) |
+| iOS | `.github/workflows/ios-eas.yml` (`workflow_dispatch`) | EAS IPA / TestFlight when `EXPO_TOKEN` + Apple certs exist |
+
+Local web export:
+
+```bash
+npm run preflight
+npm run web:export
+```
+
+Local iOS (Mac): `npm run ios --workspace=mobile` or `eas build --platform ios --profile preview`.
+
+Hosted catalog (optional): see `services/api/README.md`. LAN Manager host: `npm run manager` (port 3848).
+
 ## Smoke test (required before calling a release good)
 
 - [ ] Uninstall previous Setlist Ultra APK
 - [ ] Install `setlist-ultra-android.apk` from GitHub Releases
 - [ ] App opens (not instant close / endless splash)
 - [ ] Demo song visible on Songs tab
+- [ ] Import a tiny `.sbp` / `.sbpbackup` (or paste ChordPro) and open Live
+- [ ] Web: `npm run mobile` → press `w` → library loads
 - [ ] Optional: UG import with proxy on PC + `EXPO_PUBLIC_UG_PROXY_URL` set to LAN IP in `.env` before build
 
 ## Troubleshooting

@@ -8,7 +8,7 @@ let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 export async function getDatabase() {
   if (dbInstance) return dbInstance;
 
-  const sqlite = await SQLite.openDatabaseAsync('setlist-ultra.db');
+  const sqlite = await SQLite.openDatabaseAsync('setlist-ultra-v2.db');
   const statements = MIGRATION_SQL.split(';')
     .map((s) => s.trim())
     .filter(Boolean);

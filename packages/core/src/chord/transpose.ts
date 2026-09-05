@@ -47,6 +47,7 @@ export function isLikelyChord(token: string): boolean {
   return CHORD_RE.test(token.trim());
 }
 
+/** Display/order matches Songbook Pro chromatic index (0 = A). */
 export const KEY_OPTIONS = [
-  'C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B',
+  'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#',
 ] as const;

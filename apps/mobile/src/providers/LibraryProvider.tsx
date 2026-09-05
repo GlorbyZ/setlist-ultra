@@ -1,14 +1,25 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { SongRow, SetlistRow } from '@setlist-ultra/db';
-import { listSetlists, listSongs } from '@/src/lib/repository';
+import type { OrgRow, SetlistRow, SongRow } from '@setlist-ultra/db';
+import {
+  getAppState,
+  getLibraryScope,
+  listOrgs,
+  listSetlists,
+  listSongs,
+  patchAppState,
+  type LibraryScope,
+} from '@/src/lib/repository';
 import { seedDemoSongIfEmpty } from '@/src/lib/seed';
 
 type LibraryContextValue = {
   songs: SongRow[];
   setlists: SetlistRow[];
+  orgs: OrgRow[];
+  scope: LibraryScope;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  setScope: (scope: LibraryScope) => Promise<void>;
 };
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
@@ -16,6 +27,8 @@ const LibraryContext = createContext<LibraryContextValue | null>(null);
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [setlists, setSetlists] = useState<SetlistRow[]>([]);
+  const [orgs, setOrgs] = useState<OrgRow[]>([]);
+  const [scope, setScopeState] = useState<LibraryScope>({ libraryKind: 'personal' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,9 +37,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       await seedDemoSongIfEmpty();
-      const [songRows, setlistRows] = await Promise.all([listSongs(), listSetlists()]);
+      const current = await getLibraryScope();
+      setScopeState(current);
+      const [songRows, setlistRows, orgRows] = await Promise.all([
+        listSongs(current),
+        listSetlists(current),
+        listOrgs(),
+      ]);
       setSongs(songRows);
       setSetlists(setlistRows);
+      setOrgs(orgRows);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load library';
       console.error('Library init failed:', err);
@@ -36,13 +56,21 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setScope = async (next: LibraryScope) => {
+    await patchAppState({
+      currentLibraryKind: next.libraryKind,
+      currentOrgId: next.orgId ?? null,
+    });
+    await refresh();
+  };
+
   useEffect(() => {
     void refresh();
   }, []);
 
   const value = useMemo(
-    () => ({ songs, setlists, loading, error, refresh }),
-    [songs, setlists, loading, error],
+    () => ({ songs, setlists, orgs, scope, loading, error, refresh, setScope }),
+    [songs, setlists, orgs, scope, loading, error],
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;
@@ -52,4 +80,13 @@ export function useLibrary() {
   const ctx = useContext(LibraryContext);
   if (!ctx) throw new Error('useLibrary must be used within LibraryProvider');
   return ctx;
+}
+
+export async function rememberLive(songId?: string | null, setlistId?: string | null, index = 0) {
+  await patchAppState({
+    currentSongId: songId ?? null,
+    currentSetlistId: setlistId ?? null,
+    currentSetIndex: index,
+  });
+  return getAppState();
 }

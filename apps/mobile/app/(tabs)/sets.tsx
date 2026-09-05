@@ -6,18 +6,21 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 
 import { Text } from '@/components/Themed';
+import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { addSongToSetlist, createSetlist } from '@/src/lib/repository';
+import { createSetlist, exportSbpBytes, setlistDuration } from '@/src/lib/repository';
+import { saveBinaryFile } from '@/src/lib/files';
+import { colors } from '@/src/theme';
 
 export default function SetsScreen() {
-  const { setlists, songs, loading, refresh } = useLibrary();
+  const { setlists, loading, refresh } = useLibrary();
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const [durations, setDurations] = useState<Record<string, number>>({});
 
   const handleCreate = async () => {
     setCreating(true);
@@ -30,29 +33,28 @@ export default function SetsScreen() {
     }
   };
 
-  const handleQuickAdd = async (setlistId: string) => {
-    if (!songs.length) {
-      Alert.alert('No songs', 'Import a song first.');
-      return;
+  const handleExport = async (id: string, title: string) => {
+    try {
+      const bytes = await exportSbpBytes('set', id);
+      await saveBinaryFile(`${title}.sbp`, bytes);
+    } catch (error) {
+      Alert.alert('Export failed', error instanceof Error ? error.message : 'Unknown error');
     }
-
-    await addSongToSetlist(setlistId, songs[0].id);
-    await refresh();
-    router.push(`/setlist/${setlistId}`);
   };
 
   return (
     <View style={styles.container}>
+      <LibrarySwitcher />
       <Pressable style={styles.createButton} onPress={handleCreate} disabled={creating}>
         {creating ? (
-          <ActivityIndicator color="#0f172a" />
+          <ActivityIndicator color={colors.accentText} />
         ) : (
-          <Text style={styles.createText}>+ New Setlist</Text>
+          <Text style={styles.createText}>+ New set</Text>
         )}
       </Pressable>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />
       ) : (
         <FlatList
           data={setlists}
@@ -60,16 +62,28 @@ export default function SetsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No setlists yet</Text>
-              <Text style={styles.emptyBody}>Create a setlist for your next gig.</Text>
+              <Text style={styles.emptyTitle}>No sets yet</Text>
+              <Text style={styles.emptyBody}>Build a setlist, then export a .sbp share for Songbook Pro.</Text>
             </View>
           }
           renderItem={({ item }) => (
-            <Pressable style={styles.row} onPress={() => router.push(`/setlist/${item.id}`)}>
+            <Pressable
+              style={styles.row}
+              onPress={() => router.push(`/setlist/${item.id}`)}
+              onLayout={() => {
+                if (durations[item.id] != null) return;
+                void setlistDuration(item.id).then((sec) =>
+                  setDurations((prev) => ({ ...prev, [item.id]: sec })),
+                );
+              }}>
               <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.meta}>{item.eventDate ?? 'No date'}</Text>
-              <Pressable style={styles.quickAdd} onPress={() => handleQuickAdd(item.id)}>
-                <Text style={styles.quickAddText}>Quick add first song</Text>
+              <Text style={styles.meta}>
+                {item.eventDate ?? 'No date'}
+                {item.pinned ? ' · Pinned' : ''}
+                {durations[item.id] != null ? ` · ${Math.round(durations[item.id] / 60)} min` : ''}
+              </Text>
+              <Pressable style={styles.export} onPress={() => void handleExport(item.id, item.title)}>
+                <Text style={styles.exportText}>Export .sbp</Text>
               </Pressable>
             </Pressable>
           )}
@@ -80,29 +94,29 @@ export default function SetsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617', padding: 16 },
+  container: { flex: 1, backgroundColor: colors.bg, padding: 16 },
   createButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: colors.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 16,
   },
-  createText: { color: '#0f172a', fontWeight: '700', fontSize: 16 },
+  createText: { color: colors.accentText, fontWeight: '700', fontSize: 16 },
   list: { paddingBottom: 40 },
   row: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.panel,
     borderRadius: 14,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: colors.border,
   },
-  title: { color: '#f8fafc', fontSize: 18, fontWeight: '700' },
-  meta: { color: '#94a3b8', marginTop: 4 },
-  quickAdd: { marginTop: 12 },
-  quickAddText: { color: '#f59e0b', fontWeight: '600' },
+  title: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  meta: { color: colors.muted, marginTop: 4 },
+  export: { marginTop: 12 },
+  exportText: { color: colors.accent, fontWeight: '600' },
   empty: { padding: 32, alignItems: 'center' },
-  emptyTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  emptyBody: { color: '#94a3b8', marginTop: 8, textAlign: 'center' },
+  emptyTitle: { color: colors.text, fontSize: 20, fontWeight: '700' },
+  emptyBody: { color: colors.muted, marginTop: 8, textAlign: 'center' },
 });
