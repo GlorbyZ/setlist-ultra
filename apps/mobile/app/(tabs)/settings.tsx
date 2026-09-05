@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
+import { BrandDialog } from '@/src/components/BrandDialog';
 import { config, isHostedConfigured } from '@/src/lib/config';
 import { exportSbpBytes } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
@@ -27,25 +20,28 @@ import { THEME_OPTIONS, useTheme, useThemedStyles, type AppTheme, type ThemeId }
 export default function SettingsScreen() {
   const { theme, themeId, setThemeId } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const hosted = isHostedConfigured();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('Local library');
+  const [status, setStatus] = useState(hosted ? 'Local library' : 'Cloud sync is off. Using this device only.');
+  const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
+    if (!hosted) return;
     void hostedSessionEmail().then((value) => {
       setSessionEmail(value);
       if (value) setStatus(`Signed in as ${value}`);
     });
-  }, []);
+  }, [hosted]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
       await fn();
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
+      setDialog({ title: 'Could not finish', body: error instanceof Error ? error.message : 'Unknown error' });
     } finally {
       setBusy(false);
     }
@@ -70,80 +66,84 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={styles.heading}>Sync</Text>
-      <Text style={styles.body}>
-        {isHostedConfigured()
-          ? 'Cloud backup when signed in.'
-          : 'Cloud backup when signed in. Add Supabase keys to enable.'}
-      </Text>
-      <Text style={styles.status}>{status}</Text>
-      {sessionEmail ? (
-        <Pressable
-          style={styles.ghost}
-          disabled={busy}
-          onPress={() =>
-            void run(async () => {
-              await hostedSignOut();
-              setSessionEmail(null);
-              setStatus('Signed out · local only');
-            })
-          }>
-          <Text style={styles.ghostText}>Sign out</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.card}>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            placeholder="Email"
-            placeholderTextColor={theme.faint}
-            style={styles.input}
-          />
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Password"
-            placeholderTextColor={theme.faint}
-            style={styles.input}
-          />
+      {hosted ? (
+        <>
+          <Text style={styles.body}>Cloud backup when signed in.</Text>
+          <Text style={styles.status}>{status}</Text>
+          {sessionEmail ? (
+            <Pressable
+              style={styles.ghost}
+              disabled={busy}
+              onPress={() =>
+                void run(async () => {
+                  await hostedSignOut();
+                  setSessionEmail(null);
+                  setStatus('Signed out · local only');
+                })
+              }>
+              <Text style={styles.ghostText}>Sign out</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.card}>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                placeholder="Email"
+                placeholderTextColor={theme.faint}
+                style={styles.input}
+              />
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="Password"
+                placeholderTextColor={theme.faint}
+                style={styles.input}
+              />
+              <BrandButton
+                label="Sign in"
+                busy={busy}
+                onPress={() =>
+                  void run(async () => {
+                    await hostedSignIn(email.trim(), password);
+                    setSessionEmail(email.trim());
+                    setStatus(`Signed in as ${email.trim()}`);
+                  })
+                }
+              />
+              <Pressable
+                style={styles.ghost}
+                disabled={busy}
+                onPress={() =>
+                  void run(async () => {
+                    await hostedSignUp(email.trim(), password);
+                    setStatus('Check email to confirm, then sign in.');
+                  })
+                }>
+                <Text style={styles.ghostText}>Create account</Text>
+              </Pressable>
+            </View>
+          )}
           <BrandButton
-            label="Sign in"
+            label="Sync now"
+            disabled={!sessionEmail}
             busy={busy}
             onPress={() =>
               void run(async () => {
-                await hostedSignIn(email.trim(), password);
-                setSessionEmail(email.trim());
-                setStatus(`Signed in as ${email.trim()}`);
+                await syncPersonalLibrary();
+                setStatus('Catalog + library synced');
               })
             }
           />
-          <Pressable
-            style={styles.ghost}
-            disabled={busy}
-            onPress={() =>
-              void run(async () => {
-                await hostedSignUp(email.trim(), password);
-                setStatus('Check email to confirm, then sign in.');
-              })
-            }>
-            <Text style={styles.ghostText}>Create account</Text>
-          </Pressable>
+        </>
+      ) : (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Cloud sync is off.</Text>
+          <Text style={styles.cardBody}>Using this device only.</Text>
         </View>
       )}
-
-      <BrandButton
-        label="Sync now"
-        disabled={!sessionEmail}
-        busy={busy}
-        onPress={() =>
-          void run(async () => {
-            await syncPersonalLibrary();
-            setStatus('Catalog + library synced');
-          })
-        }
-      />
 
       <Text style={styles.heading}>Backup</Text>
       <Pressable
@@ -171,7 +171,7 @@ export default function SettingsScreen() {
           onPress={() =>
             void run(async () => {
               await pushSnapshotToManager();
-              Alert.alert('Pushed', `Snapshot sent to ${config.managerUrl}`);
+              setDialog({ title: 'Pushed', body: `Snapshot sent to ${config.managerUrl}` });
             })
           }>
           <Text style={styles.ghostText}>Push library to Manager</Text>
@@ -183,6 +183,14 @@ export default function SettingsScreen() {
         <Text style={styles.cardBody}>Map page-turners. Page Up/Down and arrows turn pages.</Text>
         <Text style={styles.cardBody}>This device: {Platform.OS}</Text>
       </View>
+
+      <BrandDialog
+        visible={Boolean(dialog)}
+        title={dialog?.title ?? ''}
+        body={dialog?.body}
+        onClose={() => setDialog(null)}
+        actions={[{ label: 'OK', onPress: () => setDialog(null) }]}
+      />
     </ScrollView>
   );
 }

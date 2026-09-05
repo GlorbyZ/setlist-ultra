@@ -103,6 +103,16 @@ create policy org_members_insert on public.org_members for insert to authenticat
     select 1 from public.org_members m where m.org_id = org_members.org_id and m.user_id = auth.uid() and m.role in ('owner', 'admin')
   )
 );
+create policy org_members_delete on public.org_members for delete to authenticated using (
+  user_id = auth.uid() or exists (
+    select 1 from public.org_members m where m.org_id = org_members.org_id and m.user_id = auth.uid() and m.role in ('owner', 'admin')
+  )
+);
+create policy orgs_delete on public.orgs for delete to authenticated using (
+  created_by = auth.uid() or exists (
+    select 1 from public.org_members m where m.org_id = orgs.id and m.user_id = auth.uid() and m.role = 'owner'
+  )
+);
 
 create policy library_personal on public.library_items for all to authenticated using (user_id = auth.uid())
   with check (user_id = auth.uid());

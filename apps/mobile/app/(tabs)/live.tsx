@@ -48,6 +48,7 @@ export default function LiveTab() {
       <View style={styles.center}>
         <Text style={styles.body}>Pick a song or set.</Text>
         <BrandButton label="Go to Songs" onPress={() => router.push('/')} />
+        <BrandButton label="Go to Sets" onPress={() => router.push('/sets')} />
       </View>
     );
   }

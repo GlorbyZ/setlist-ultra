@@ -5,7 +5,7 @@ import { useTheme } from '@/src/theme';
 const logoMain = require('../../assets/brand/logo-main.png');
 const logoWhite = require('../../assets/brand/logo-white.png');
 
-export function BrandMark({ height = 28 }: { height?: number }) {
+export function BrandMark({ height = 32 }: { height?: number }) {
   const { theme } = useTheme();
   const light = theme.id === 'ultra-light';
   return (

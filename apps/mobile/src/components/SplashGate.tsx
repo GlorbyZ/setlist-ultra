@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   runOnJS,
@@ -10,7 +10,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { brand, useTheme } from '@/src/theme';
@@ -30,8 +29,7 @@ export function SplashGate({ fontsReady, children }: Props) {
   const [visible, setVisible] = useState(true);
   const [reduceMotion, setReduceMotion] = useState(false);
 
-  const glow = useSharedValue(0);
-  const logo = useSharedValue(1);
+  const logo = useSharedValue(0.92);
   const cover = useSharedValue(1);
 
   const light = theme.id === 'ultra-light';
@@ -48,14 +46,7 @@ export function SplashGate({ fontsReady, children }: Props) {
   useEffect(() => {
     if (!ready || !visible) return;
 
-    const finish = () => {
-      setVisible(false);
-      if (Platform.OS === 'ios') {
-        void import('expo-haptics').then((Haptics) =>
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-        );
-      }
-    };
+    const finish = () => setVisible(false);
 
     if (reduceMotion) {
       cover.value = 0;
@@ -63,27 +54,18 @@ export function SplashGate({ fontsReady, children }: Props) {
       return;
     }
 
-    glow.value = withDelay(150, withTiming(1, { duration: 350, easing: Easing.out(Easing.quad) }));
-    logo.value = withDelay(
-      200,
-      withSpring(1, { damping: 16, stiffness: 180, mass: 0.7 }),
-    );
+    logo.value = withDelay(80, withSpring(1, { damping: 16, stiffness: 180, mass: 0.7 }));
     cover.value = withDelay(
-      900,
-      withTiming(0, { duration: 200, easing: Easing.inOut(Easing.quad) }, (finished) => {
+      700,
+      withTiming(0, { duration: 220, easing: Easing.inOut(Easing.quad) }, (finished) => {
         if (finished) runOnJS(finish)();
       }),
     );
-  }, [ready, reduceMotion, visible, cover, glow, logo]);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value * 0.45,
-    transform: [{ scale: 0.92 + glow.value * 0.08 }],
-  }));
+  }, [ready, reduceMotion, visible, cover, logo]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logo.value,
-    transform: [{ scale: 0.92 + logo.value * 0.08 }],
+    transform: [{ scale: logo.value }],
   }));
 
   const coverStyle = useAnimatedStyle(() => ({
@@ -95,14 +77,6 @@ export function SplashGate({ fontsReady, children }: Props) {
       {children}
       {visible ? (
         <Animated.View style={[styles.overlay, { backgroundColor: bg }, coverStyle]} pointerEvents="none">
-          <Animated.View style={[styles.glowWrap, glowStyle]}>
-            <LinearGradient
-              colors={[brand.ultraMagenta, brand.ultraViolet, brand.ultraBlue]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.glow}
-            />
-          </Animated.View>
           <Animated.Image
             source={light ? logoMain : logoWhite}
             resizeMode="contain"
@@ -122,13 +96,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 50,
   },
-  glowWrap: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  glow: { flex: 1, borderRadius: 140 },
   logo: { width: 240, height: 240 },
 });

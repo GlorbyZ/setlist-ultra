@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
 import { actionFromKey, type PedalAction } from '@/src/lib/pedals';
@@ -23,6 +24,7 @@ type Props = {
   onToggleScroll?: () => void;
   scrolling?: boolean;
   onZoom?: (delta: number) => void;
+  padDock?: boolean;
 };
 
 export function LiveChrome({
@@ -42,9 +44,12 @@ export function LiveChrome({
   onToggleScroll,
   scrolling,
   onZoom,
+  padDock,
 }: Props) {
   const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
+  const dockPad = padDock ? Math.max(insets.bottom, 8) : 8;
 
   return (
     <View style={styles.shell}>
@@ -81,7 +86,7 @@ export function LiveChrome({
 
       <View style={styles.stage}>{children}</View>
 
-      <View style={styles.dock}>
+      <View style={[styles.dock, { paddingBottom: dockPad }]}>
         {open ? (
           <View style={styles.tools}>
             {onPrev ? (

@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
 import { type ComponentProps } from 'react';
 import { type ColorValue, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandMark } from '@/src/components/BrandMark';
 import { BRAND_GRADIENT, useTheme } from '@/src/theme';
@@ -37,12 +38,14 @@ function TabIcon({
 
 export default function TabLayout() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabPad = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
       screenOptions={{
-        headerTitle: () => <BrandMark />,
-        headerTitleAlign: 'center',
+        headerTitle: () => <BrandMark height={32} />,
+        headerTitleAlign: 'left',
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
         tabBarActiveBackgroundColor: 'transparent',
@@ -52,7 +55,9 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: theme.bg,
           borderTopColor: theme.border,
-          height: 62,
+          height: 56 + tabPad,
+          paddingBottom: tabPad,
+          paddingTop: 6,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}>

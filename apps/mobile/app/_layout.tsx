@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ShareIntentProvider } from 'expo-share-intent';
 import { useEffect, useMemo } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
 import { IncomingShare } from '@/src/components/IncomingShare';
@@ -35,6 +36,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
       <ShareIntentProvider>
         <AppThemeProvider>
           <LibraryProvider>
@@ -45,6 +47,7 @@ export default function RootLayout() {
           </LibraryProvider>
         </AppThemeProvider>
       </ShareIntentProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { OrgRow, SetlistRow, SongRow } from '@setlist-ultra/db';
 import {
   getAppState,
@@ -18,7 +18,7 @@ type LibraryContextValue = {
   scope: LibraryScope;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { silent?: boolean }) => Promise<void>;
   setScope: (scope: LibraryScope) => Promise<void>;
 };
 
@@ -32,8 +32,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
-    setLoading(true);
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       await seedDemoSongIfEmpty();
@@ -54,15 +54,15 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const setScope = async (next: LibraryScope) => {
+  const setScope = useCallback(async (next: LibraryScope) => {
     await patchAppState({
       currentLibraryKind: next.libraryKind,
       currentOrgId: next.orgId ?? null,
     });
     await refresh();
-  };
+  }, [refresh]);
 
   useEffect(() => {
     void refresh();
@@ -70,7 +70,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ songs, setlists, orgs, scope, loading, error, refresh, setScope }),
-    [songs, setlists, orgs, scope, loading, error],
+    [songs, setlists, orgs, scope, loading, error, refresh, setScope],
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

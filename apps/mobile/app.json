@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -41,6 +41,7 @@
     },
     "android": {
       "package": "com.setlistultra.app",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

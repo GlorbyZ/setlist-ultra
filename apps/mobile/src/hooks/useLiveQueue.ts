@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 import {
   getAppState,
@@ -15,36 +16,40 @@ export function useLiveQueue(preferredSongId?: string) {
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const state = await getAppState();
-      let list: SongRow[] = songs;
-      let nextIndex = 0;
+  const reload = useCallback(async () => {
+    const state = await getAppState();
+    let list: SongRow[] = songs;
+    let nextIndex = 0;
 
-      if (state.currentSetlistId) {
-        const items = await getSetlistItems(state.currentSetlistId);
-        const rows = await Promise.all(
-          items.filter((item) => item.itemType === 'song' && item.songId).map((item) => getSong(item.songId as string)),
-        );
-        list = rows.filter(Boolean) as SongRow[];
-        const preferred = preferredSongId ?? state.currentSongId;
-        const fromPreferred = preferred ? list.findIndex((song) => song.id === preferred) : -1;
-        nextIndex = fromPreferred >= 0 ? fromPreferred : Math.min(list.length - 1, Math.max(0, state.currentSetIndex ?? 0));
-      } else {
-        const preferred = preferredSongId ?? state.currentSongId ?? songs[0]?.id;
-        nextIndex = Math.max(0, list.findIndex((song) => song.id === preferred));
-      }
+    if (state.currentSetlistId) {
+      const items = await getSetlistItems(state.currentSetlistId);
+      const rows = await Promise.all(
+        items.filter((item) => item.itemType === 'song' && item.songId).map((item) => getSong(item.songId as string)),
+      );
+      list = rows.filter(Boolean) as SongRow[];
+      const preferred = preferredSongId ?? state.currentSongId;
+      const fromPreferred = preferred ? list.findIndex((song) => song.id === preferred) : -1;
+      nextIndex = fromPreferred >= 0 ? fromPreferred : Math.min(Math.max(0, state.currentSetIndex ?? 0), Math.max(0, list.length - 1));
+    } else {
+      const preferred = preferredSongId ?? state.currentSongId ?? songs[0]?.id;
+      nextIndex = Math.max(0, list.findIndex((song) => song.id === preferred));
+    }
 
-      if (cancelled) return;
-      setQueue(list);
-      setIndex(list.length ? nextIndex : 0);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setQueue(list);
+    setIndex(list.length ? nextIndex : 0);
+    setLoading(false);
   }, [preferredSongId, songs]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      void reload();
+    }, [reload]),
+  );
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const song = queue[index] ?? null;
 
@@ -59,5 +64,5 @@ export function useLiveQueue(preferredSongId?: string) {
     [index, queue],
   );
 
-  return { queue, index, song, loading, go };
+  return { queue, index, song, loading, go, reload };
 }

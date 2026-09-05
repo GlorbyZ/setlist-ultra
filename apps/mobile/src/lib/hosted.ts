@@ -259,4 +259,37 @@ export async function createHostedOrg(name: string) {
   return local;
 }
 
+export async function listHostedMembers(remoteOrgId: string) {
+  const supabase = getHostedClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('org_members')
+    .select('user_id, role, created_at')
+    .eq('org_id', remoteOrgId);
+  if (error) throw error;
+  return (data ?? []) as { user_id: string; role: string; created_at: string }[];
+}
+
+export async function removeHostedMember(remoteOrgId: string, userId: string) {
+  const supabase = getHostedClient();
+  if (!supabase) throw new Error('Hosted sync is not configured.');
+  const { error } = await supabase.from('org_members').delete().eq('org_id', remoteOrgId).eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function leaveHostedOrg(remoteOrgId: string) {
+  const supabase = getHostedClient();
+  if (!supabase) return;
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return;
+  await removeHostedMember(remoteOrgId, data.user.id);
+}
+
+export async function deleteHostedOrg(remoteOrgId: string) {
+  const supabase = getHostedClient();
+  if (!supabase) throw new Error('Hosted sync is not configured.');
+  const { error } = await supabase.from('orgs').delete().eq('id', remoteOrgId);
+  if (error) throw error;
+}
+
 export { findChartByHash };

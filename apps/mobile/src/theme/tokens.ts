@@ -58,7 +58,7 @@ export const THEMES: Record<ResolvedThemeId, AppTheme> = {
     panel: brand.ink,
     border: '#1C1C1F',
     text: brand.snow,
-    muted: '#9A9AA3',
+    muted: '#A1A1AA',
     faint: '#6B6B76',
     accent: brand.ultraBlue,
     accentText: '#FFFFFF',

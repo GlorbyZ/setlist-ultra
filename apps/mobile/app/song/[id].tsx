@@ -72,6 +72,7 @@ export default function SongScreen() {
       onToggleScroll={() => setScrolling((v) => !v)}
       scrolling={scrolling}
       onZoom={(d) => setFontSize((v) => Math.min(32, Math.max(14, v + d * 2)))}
+      padDock
       onPedal={(action) => {
         if (action === 'next') go(1);
         if (action === 'prev') go(-1);

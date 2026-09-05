@@ -9,6 +9,8 @@ import {
   parseSbpArchive,
   packSbpArchive,
   sbpKeyToName,
+  transposeDocument,
+  wrapSemitones,
   type SbpLibrary,
   type SbpSetItem,
   type SbpSong,
@@ -177,20 +179,29 @@ async function nextSbpIds(countSongs = 1, countSets = 0, countItems = 0) {
   return { songStart, setStart, itemStart };
 }
 
-export async function saveSongFromUg(tab: UgTabResponse, sourceUrl: string, scope?: LibraryScope) {
-  const { document, meta } = normalizeUgTab(tab, sourceUrl);
+export async function saveSongFromUg(
+  tab: UgTabResponse,
+  sourceUrl: string,
+  options?: LibraryScope | { scope?: LibraryScope; transpose?: number; capo?: number },
+) {
+  const scope = options && 'libraryKind' in options ? options : options?.scope;
+  const transpose = options && 'transpose' in options ? (options.transpose ?? 0) : 0;
+  const normalized = normalizeUgTab(tab, sourceUrl);
+  const document = transpose ? transposeDocument(normalized.document, transpose) : normalized.document;
+  const originalKey = shiftStoredKey(normalized.meta.originalKey, transpose);
+  const capo = options && 'capo' in options && options.capo != null ? options.capo : (normalized.meta.capo ?? 0);
   const chordpro = documentToChordPro(document, {
-    title: meta.title,
-    artist: meta.artist,
-    key: meta.originalKey,
-    capo: meta.capo,
+    title: normalized.meta.title,
+    artist: normalized.meta.artist,
+    key: originalKey,
+    capo,
   });
   const ugId = sourceUrl.match(/(\d+)(?:\/)?$/)?.[1] ?? sourceUrl;
   return insertLibrarySong({
-    title: meta.title,
-    artist: meta.artist,
-    originalKey: meta.originalKey,
-    capo: meta.capo ?? 0,
+    title: normalized.meta.title,
+    artist: normalized.meta.artist,
+    originalKey,
+    capo,
     chordpro,
     document,
     sourceProvider: 'ultimate_guitar',
@@ -199,6 +210,13 @@ export async function saveSongFromUg(tab: UgTabResponse, sourceUrl: string, scop
     sourceExternalId: ugId,
     scope,
   });
+}
+
+function shiftStoredKey(name: string | undefined, semitones: number) {
+  if (!semitones) return name;
+  const idx = keyNameToSbp(name);
+  if (idx == null) return name;
+  return sbpKeyToName(wrapSemitones(idx + semitones));
 }
 
 export async function insertLibrarySong(input: {
@@ -605,6 +623,31 @@ export async function joinOrgByCode(code: string, email = 'local') {
     createdAt: now(),
   });
   return match;
+}
+
+export async function listOrgMembers(orgId: string) {
+  const db = await getDatabase();
+  return db.select().from(orgMembers).where(eq(orgMembers.orgId, orgId));
+}
+
+export async function removeOrgMember(memberId: string) {
+  const db = await getDatabase();
+  await db.delete(orgMembers).where(eq(orgMembers.id, memberId));
+}
+
+export async function leaveOrg(orgId: string, email: string) {
+  const db = await getDatabase();
+  const rows = await db.select().from(orgMembers).where(eq(orgMembers.orgId, orgId));
+  const mine = rows.filter((row) => row.email.toLowerCase() === email.toLowerCase());
+  for (const row of mine) {
+    await db.delete(orgMembers).where(eq(orgMembers.id, row.id));
+  }
+}
+
+export async function deleteOrg(orgId: string) {
+  const db = await getDatabase();
+  await db.delete(orgMembers).where(eq(orgMembers.orgId, orgId));
+  await db.delete(orgs).where(eq(orgs.id, orgId));
 }
 
 export async function getSyncState() {

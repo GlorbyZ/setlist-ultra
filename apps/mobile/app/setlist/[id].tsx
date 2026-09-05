@@ -1,17 +1,12 @@
 import { Stack, type Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Text } from '@/components/Themed';
+import { ActionSheet, BrandDialog } from '@/src/components/BrandDialog';
+import { SongPickerModal } from '@/src/components/SongPickerModal';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { formatSetMeta } from '@/src/lib/format';
 import {
@@ -42,10 +37,13 @@ export default function SetlistScreen() {
   const [items, setItems] = useState<SetlistItemRow[]>([]);
   const [songsById, setSongsById] = useState<Record<string, SongRow>>({});
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [query, setQuery] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [totalSec, setTotalSec] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [dialog, setDialog] = useState<{ title: string; body?: string } | null>(null);
+  const pendingRemove = useRef<SetlistItemRow | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -76,72 +74,15 @@ export default function SetlistScreen() {
       currentSetIndex: index,
       currentSongId: item.songId,
     });
-    router.push('/(tabs)/live' as Href);
+    router.navigate('/live' as Href);
   };
 
   const confirmRemove = (item: SetlistItemRow) => {
-    Alert.alert('Remove from set?', itemLabel(item, songsById), [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => void removeSetlistItem(item.id).then(load),
-      },
-    ]);
-  };
-
-  const overflow = () => {
-    if (!setlist) return;
-    Alert.alert(setlist.title, undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: setlist.pinned ? 'Unpin' : 'Pin',
-        onPress: () =>
-          void updateSetlist(setlist.id, { pinned: setlist.pinned ? 0 : 1 }).then(async () => {
-            await refresh();
-            await load();
-          }),
-      },
-      {
-        text: 'Export .sbp',
-        onPress: () =>
-          void (async () => {
-            try {
-              const bytes = await exportSbpBytes('set', setlist.id);
-              await saveBinaryFile(`${setlist.title}.sbp`, bytes);
-            } catch (error) {
-              Alert.alert('Export failed', error instanceof Error ? error.message : 'Unknown error');
-            }
-          })(),
-      },
-      {
-        text: 'Delete set',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('Delete this set?', 'Songs stay in your library.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () =>
-                void deleteSetlist(setlist.id).then(async () => {
-                  await refresh();
-                  router.back();
-                }),
-            },
-          ]),
-      },
-    ]);
-  };
-
-  const addMenu = () => {
-    if (!setlist) return;
-    Alert.alert('Add to set', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Song', onPress: () => setAdding(true) },
-      { text: 'Note', onPress: () => void addNoteToSetlist(setlist.id, 'Note').then(load) },
-      { text: '30s break', onPress: () => void addTimerToSetlist(setlist.id, 30).then(load) },
-    ]);
+    pendingRemove.current = item;
+    setDialog({
+      title: 'Remove from set?',
+      body: itemLabel(item, songsById),
+    });
   };
 
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
@@ -154,6 +95,7 @@ export default function SetlistScreen() {
   }
 
   const songCount = items.filter((item) => item.itemType === 'song').length;
+  const inSet = items.map((item) => item.songId).filter(Boolean) as string[];
 
   return (
     <View style={styles.container}>
@@ -162,10 +104,10 @@ export default function SetlistScreen() {
           title: setlist.title,
           headerRight: () => (
             <View style={styles.headerActions}>
-              <Pressable onPress={addMenu} accessibilityLabel="Add" hitSlop={8}>
+              <Pressable onPress={() => setAddOpen(true)} accessibilityLabel="Add" hitSlop={8}>
                 <Text style={styles.headerAction}>+</Text>
               </Pressable>
-              <Pressable onPress={overflow} accessibilityLabel="More" hitSlop={8}>
+              <Pressable onPress={() => setMoreOpen(true)} accessibilityLabel="More" hitSlop={8}>
                 <Text style={styles.headerAction}>⋮</Text>
               </Pressable>
             </View>
@@ -220,38 +162,113 @@ export default function SetlistScreen() {
         )}
       />
 
-      {adding ? (
-        <View style={styles.picker}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Filter library…"
-            placeholderTextColor={theme.faint}
-            style={styles.search}
-          />
-          <FlatList
-            data={songs.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(query.toLowerCase()))}
-            keyExtractor={(item) => item.id}
-            style={{ maxHeight: 220 }}
-            renderItem={({ item }) => (
-              <Pressable
-                style={styles.pickRow}
-                onPress={async () => {
-                  await addSongToSetlist(setlist.id, item.id);
-                  await load();
-                  setAdding(false);
-                  setQuery('');
-                }}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.rowMeta}>{item.artist}</Text>
-              </Pressable>
-            )}
-          />
-          <Pressable onPress={() => setAdding(false)}>
-            <Text style={styles.cancel}>Close</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <ActionSheet
+        visible={addOpen}
+        title="Add to set"
+        onClose={() => setAddOpen(false)}
+        options={[
+          { label: 'Songs', onPress: () => setPicking(true) },
+          { label: 'Note', onPress: () => void addNoteToSetlist(setlist.id, 'Note').then(load) },
+          { label: '30s break', onPress: () => void addTimerToSetlist(setlist.id, 30).then(load) },
+        ]}
+      />
+
+      <ActionSheet
+        visible={moreOpen}
+        title={setlist.title}
+        onClose={() => setMoreOpen(false)}
+        options={[
+          {
+            label: setlist.pinned ? 'Unpin' : 'Pin',
+            onPress: () =>
+              void updateSetlist(setlist.id, { pinned: setlist.pinned ? 0 : 1 }).then(async () => {
+                await refresh();
+                await load();
+              }),
+          },
+          {
+            label: 'Export .sbp',
+            onPress: () =>
+              void (async () => {
+                try {
+                  const bytes = await exportSbpBytes('set', setlist.id);
+                  await saveBinaryFile(`${setlist.title}.sbp`, bytes);
+                } catch (error) {
+                  setDialog({
+                    title: 'Export failed',
+                    body: error instanceof Error ? error.message : 'Unknown error',
+                  });
+                }
+              })(),
+          },
+          {
+            label: 'Delete set',
+            danger: true,
+            onPress: () =>
+              setDialog({
+                title: 'Delete this set?',
+                body: 'Songs stay in your library.',
+              }),
+          },
+        ]}
+      />
+
+      <SongPickerModal
+        visible={picking}
+        songs={songs}
+        excludeIds={inSet}
+        onClose={() => setPicking(false)}
+        onConfirm={(ids) => {
+          void (async () => {
+            for (const songId of ids) {
+              await addSongToSetlist(setlist.id, songId);
+            }
+            await load();
+          })();
+        }}
+      />
+
+      <BrandDialog
+        visible={Boolean(dialog)}
+        title={dialog?.title ?? ''}
+        body={dialog?.body}
+        onClose={() => {
+          pendingRemove.current = null;
+          setDialog(null);
+        }}
+        actions={
+          dialog?.title === 'Remove from set?'
+            ? [
+                {
+                  label: 'Remove',
+                  danger: true,
+                  onPress: () => {
+                    const item = pendingRemove.current;
+                    pendingRemove.current = null;
+                    setDialog(null);
+                    if (item) void removeSetlistItem(item.id).then(load);
+                  },
+                },
+                { label: 'Cancel', onPress: () => setDialog(null) },
+              ]
+            : dialog?.title === 'Delete this set?'
+              ? [
+                  {
+                    label: 'Delete',
+                    danger: true,
+                    onPress: () => {
+                      setDialog(null);
+                      void deleteSetlist(setlist.id).then(async () => {
+                        await refresh();
+                        router.back();
+                      });
+                    },
+                  },
+                  { label: 'Cancel', onPress: () => setDialog(null) },
+                ]
+              : [{ label: 'OK', onPress: () => setDialog(null) }]
+        }
+      />
     </View>
   );
 }
@@ -302,18 +319,5 @@ function makeStyles(t: AppTheme) {
       paddingHorizontal: 18,
     },
     swipeRemoveText: { color: '#FFFFFF', fontWeight: '700' as const },
-    picker: { padding: 12, borderTopWidth: 1, borderTopColor: t.border, maxHeight: 320 },
-    search: {
-      backgroundColor: t.inputBg,
-      color: t.text,
-      borderRadius: t.radius.md,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      marginBottom: 8,
-    },
-    pickRow: { paddingVertical: 10 },
-    cancel: { color: t.accent, fontWeight: '700' as const, textAlign: 'center' as const, paddingVertical: 8 },
   };
 }

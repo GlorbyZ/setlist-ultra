@@ -1,21 +1,29 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { formatDate } from '@/src/lib/format';
 import { createSetlist, setlistDuration } from '@/src/lib/repository';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function SetsScreen() {
-  const { setlists, loading, refresh } = useLibrary();
+  const { setlists, loading, error, refresh } = useLibrary();
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [durations, setDurations] = useState<Record<string, number>>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh({ silent: true });
+    }, [refresh]),
+  );
 
   const handleCreate = async () => {
     setCreating(true);
@@ -28,22 +36,40 @@ export default function SetsScreen() {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <LibrarySwitcher />
       <BrandButton label="+ New set" onPress={() => void handleCreate()} busy={creating} />
 
-      {loading ? (
+      {error ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Could not load sets</Text>
+          <Text style={styles.emptyBody}>{error}</Text>
+          <BrandButton label="Retry" onPress={() => void refresh()} />
+        </View>
+      ) : loading && !refreshing ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />
       ) : (
         <FlatList
           data={setlists}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={theme.accent} />
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No sets.</Text>
-              <Text style={styles.emptyBody}>Build one for the gig.</Text>
+              <Text style={styles.emptyBody}>Tap + New set.</Text>
             </View>
           }
           renderItem={({ item }) => (
@@ -58,7 +84,7 @@ export default function SetsScreen() {
               }}>
               <Text style={styles.title}>{item.title}</Text>
               <Text style={styles.meta}>
-                {item.eventDate ?? 'No date'}
+                {formatDate(item.eventDate)}
                 {item.pinned ? ' · Pinned' : ''}
                 {durations[item.id] != null ? ` · ${Math.round(durations[item.id] / 60)} min` : ''}
               </Text>

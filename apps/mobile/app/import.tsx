@@ -1,8 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -11,8 +10,10 @@ import {
 } from 'react-native';
 
 import { Text } from '@/components/Themed';
-import { fingerprintContent, parseChordPro } from '@setlist-ultra/core';
+import { fingerprintContent, normalizeUgTab, parseChordPro, type UgTabResponse } from '@setlist-ultra/core';
 import { BrandButton } from '@/src/components/BrandButton';
+import { BrandDialog } from '@/src/components/BrandDialog';
+import { SongViewer } from '@/src/components/SongViewer';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import {
   createBlankSong,
@@ -20,7 +21,13 @@ import {
   insertLibrarySong,
   saveSongFromUg,
 } from '@/src/lib/repository';
-import { importUgTab, searchUgTabs, type UgSearchResult } from '@/src/lib/ug-api';
+import {
+  groupUgResults,
+  importUgTab,
+  searchUgTabs,
+  type UgSearchHit,
+  type UgSongGroup,
+} from '@/src/lib/ug-api';
 import { config } from '@/src/lib/config';
 import { pickBinaryFile, pickImage } from '@/src/lib/files';
 import { lookupRemoteChart } from '@/src/lib/hosted';
@@ -33,13 +40,24 @@ export default function ImportScreen() {
   const styles = useThemedStyles(makeStyles);
   const [tab, setTab] = useState<'online' | 'paste' | 'file'>('file');
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<UgSearchResult[]>([]);
+  const [groups, setGroups] = useState<UgSongGroup[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<UgSongGroup | null>(null);
+  const [previewHit, setPreviewHit] = useState<UgSearchHit | null>(null);
+  const [previewTab, setPreviewTab] = useState<UgTabResponse | null>(null);
+  const [previewShift, setPreviewShift] = useState(0);
+  const [previewCapo, setPreviewCapo] = useState(0);
   const [searching, setSearching] = useState(false);
-  const [importingUrl, setImportingUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [directUrl, setDirectUrl] = useState('');
   const [paste, setPaste] = useState('');
   const [title, setTitle] = useState('Untitled');
   const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
+
+  const previewDoc = useMemo(
+    () => (previewTab && previewHit ? normalizeUgTab(previewTab, previewHit.url) : null),
+    [previewTab, previewHit],
+  );
 
   const afterImport = async (songId?: string) => {
     await refresh();
@@ -50,25 +68,45 @@ export default function ImportScreen() {
   const runSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
+    setSelectedGroup(null);
+    setPreviewHit(null);
+    setPreviewTab(null);
     try {
       const rows = await searchUgTabs(query.trim());
-      setResults(rows);
-      if (!rows.length) Alert.alert('No results', 'Try another search or paste a UG tab URL below.');
+      setGroups(groupUgResults(rows));
+      if (!rows.length) setDialog({ title: 'No results', body: 'Try another search or paste a UG tab URL below.' });
     } catch (error) {
-      Alert.alert(
-        'Search failed',
-        `${error instanceof Error ? error.message : 'Unknown error'}\n\nProxy: ${config.ugProxyUrl}`,
-      );
+      setDialog({
+        title: 'Search failed',
+        body: `${error instanceof Error ? error.message : 'Unknown error'}\n\nProxy: ${config.ugProxyUrl}`,
+      });
     } finally {
       setSearching(false);
     }
   };
 
-  const importUrl = async (url: string) => {
-    setImportingUrl(url);
+  const openVersion = async (hit: UgSearchHit) => {
+    setLoadingPreview(true);
+    setPreviewHit(hit);
+    setPreviewShift(0);
+    try {
+      const tabData = await importUgTab(hit.url);
+      setPreviewTab(tabData);
+      const capo = Number.parseInt(tabData.tab.capo ?? '0', 10);
+      setPreviewCapo(Number.isFinite(capo) ? capo : 0);
+    } catch (error) {
+      setPreviewHit(null);
+      setDialog({ title: 'Preview failed', body: error instanceof Error ? error.message : 'Unknown error' });
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const importUrl = async (url: string, transpose = 0, capo?: number) => {
+    setBusy(true);
     try {
       const remote = await lookupRemoteChart(fingerprintContent(url), 'ultimate_guitar', url);
-      if (remote?.chordpro) {
+      if (remote?.chordpro && !transpose) {
         const songId = await insertLibrarySong({
           title: remote.title || 'Imported chart',
           artist: remote.artist || '',
@@ -82,13 +120,13 @@ export default function ImportScreen() {
         await afterImport(songId);
         return;
       }
-      const tabData = await importUgTab(url);
-      const songId = await saveSongFromUg(tabData, url);
+      const tabData = previewTab && previewHit?.url === url ? previewTab : await importUgTab(url);
+      const songId = await saveSongFromUg(tabData, url, { transpose, capo });
       await afterImport(songId);
     } catch (error) {
-      Alert.alert('Import failed', error instanceof Error ? error.message : 'Unknown error');
+      setDialog({ title: 'Import failed', body: error instanceof Error ? error.message : 'Unknown error' });
     } finally {
-      setImportingUrl(null);
+      setBusy(false);
     }
   };
 
@@ -103,10 +141,10 @@ export default function ImportScreen() {
         await afterImport(result.songId);
         return;
       }
-      Alert.alert('Imported', `${result.songs} songs, ${result.sets} sets`);
+      setDialog({ title: 'Imported', body: `${result.songs} songs, ${result.sets} sets` });
       router.back();
     } catch (error) {
-      Alert.alert('Import failed', error instanceof Error ? error.message : 'Unknown error');
+      setDialog({ title: 'Import failed', body: error instanceof Error ? error.message : 'Unknown error' });
     } finally {
       setBusy(false);
     }
@@ -128,7 +166,7 @@ export default function ImportScreen() {
       });
       await afterImport(songId);
     } catch (error) {
-      Alert.alert('Paste failed', error instanceof Error ? error.message : 'Unknown error');
+      setDialog({ title: 'Paste failed', body: error instanceof Error ? error.message : 'Unknown error' });
     } finally {
       setBusy(false);
     }
@@ -155,7 +193,7 @@ export default function ImportScreen() {
       });
       await afterImport(id);
     } catch (error) {
-      Alert.alert('Scan failed', error instanceof Error ? error.message : 'Unknown error');
+      setDialog({ title: 'Scan failed', body: error instanceof Error ? error.message : 'Unknown error' });
     } finally {
       setBusy(false);
     }
@@ -207,18 +245,80 @@ export default function ImportScreen() {
               {searching ? <ActivityIndicator color={theme.accentText} /> : <Text style={styles.buttonText}>Go</Text>}
             </Pressable>
           </View>
-          <FlatList
-            data={results}
-            keyExtractor={(item) => item.url}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
-              <Pressable style={styles.result} disabled={importingUrl === item.url} onPress={() => void importUrl(item.url)}>
-                <Text style={styles.resultTitle}>{item.title}</Text>
-                <Text style={styles.resultUrl}>{item.url}</Text>
-                {importingUrl === item.url ? <ActivityIndicator style={{ marginTop: 8 }} color={theme.accent} /> : null}
+
+          {previewHit && previewDoc ? (
+            <View style={styles.previewCard}>
+              <Pressable onPress={() => { setPreviewHit(null); setPreviewTab(null); }}>
+                <Text style={styles.ghostText}>← Versions</Text>
               </Pressable>
-            )}
-          />
+              <Text style={styles.resultTitle}>{previewDoc.meta.title}</Text>
+              <Text style={styles.resultUrl}>
+                {previewDoc.meta.artist}
+                {previewHit.type ? ` · ${previewHit.type}` : ''}
+                {previewHit.key ? ` · ${previewHit.key}` : ''}
+              </Text>
+              <View style={styles.previewTools}>
+                <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v - 1)}>
+                  <Text style={styles.toolText}>Key −</Text>
+                </Pressable>
+                <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v + 1)}>
+                  <Text style={styles.toolText}>Key +</Text>
+                </Pressable>
+                <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => Math.max(0, v - 1))}>
+                  <Text style={styles.toolText}>Capo −</Text>
+                </Pressable>
+                <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => v + 1)}>
+                  <Text style={styles.toolText}>Capo +</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.label}>
+                Shift {previewShift > 0 ? `+${previewShift}` : previewShift} · Capo {previewCapo}
+              </Text>
+              <View style={styles.previewStage}>
+                <SongViewer document={previewDoc.document} transpose={previewShift} capo={previewCapo} fontSize={16} />
+              </View>
+              <BrandButton
+                label="Import"
+                busy={busy}
+                onPress={() => void importUrl(previewHit.url, previewShift, previewCapo)}
+              />
+            </View>
+          ) : selectedGroup ? (
+            <View>
+              <Pressable onPress={() => setSelectedGroup(null)}>
+                <Text style={styles.ghostText}>← Songs</Text>
+              </Pressable>
+              <Text style={styles.resultTitle}>{selectedGroup.songName}</Text>
+              <Text style={styles.resultUrl}>{selectedGroup.artistName || 'Unknown artist'}</Text>
+              {loadingPreview ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : null}
+              {selectedGroup.versions.map((hit) => (
+                <Pressable key={hit.url} style={styles.result} onPress={() => void openVersion(hit)}>
+                  <Text style={styles.resultTitle}>{hit.type || 'Version'}</Text>
+                  <Text style={styles.resultUrl}>
+                    {[hit.rating != null ? `${hit.rating.toFixed(1)}★` : null, hit.key, hit.url.replace(/^https?:\/\//, '')]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <FlatList
+              data={groups}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <Pressable style={styles.result} onPress={() => setSelectedGroup(item)}>
+                  <Text style={styles.resultTitle}>{item.songName}</Text>
+                  <Text style={styles.resultUrl}>
+                    {item.artistName || 'Unknown artist'} · {item.versions.length} version
+                    {item.versions.length === 1 ? '' : 's'}
+                  </Text>
+                </Pressable>
+              )}
+            />
+          )}
+
           <Text style={styles.label}>Or paste tab URL</Text>
           <TextInput
             value={directUrl}
@@ -228,7 +328,7 @@ export default function ImportScreen() {
             autoCapitalize="none"
             style={styles.input}
           />
-          <BrandButton label="Import URL" onPress={() => void importUrl(directUrl.trim())} disabled={!directUrl.trim()} />
+          <BrandButton label="Import URL" onPress={() => void importUrl(directUrl.trim())} disabled={!directUrl.trim()} busy={busy} />
         </View>
       ) : null}
 
@@ -246,6 +346,14 @@ export default function ImportScreen() {
           <BrandButton label="Save to library" onPress={() => void importPaste()} disabled={!paste.trim()} busy={busy} />
         </View>
       ) : null}
+
+      <BrandDialog
+        visible={Boolean(dialog)}
+        title={dialog?.title ?? ''}
+        body={dialog?.body}
+        onClose={() => setDialog(null)}
+        actions={[{ label: 'OK', onPress: () => setDialog(null) }]}
+      />
     </ScrollView>
   );
 }
@@ -298,5 +406,17 @@ function makeStyles(t: AppTheme) {
     },
     resultTitle: { color: t.text, fontWeight: '700' as const },
     resultUrl: { color: t.faint, marginTop: 4, fontSize: 12 },
+    previewCard: { marginBottom: 16 },
+    previewTools: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginVertical: 12 },
+    tool: {
+      backgroundColor: t.panel,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: t.radius.sm,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    toolText: { color: t.text, fontWeight: '600' as const, fontSize: 13 },
+    previewStage: { height: 280, borderWidth: 1, borderColor: t.border, borderRadius: t.radius.md, overflow: 'hidden' as const, marginBottom: 12 },
   };
 }

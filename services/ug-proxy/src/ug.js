@@ -98,15 +98,27 @@ function collectSearchResults(store) {
     if (!node || typeof node !== 'object' || Array.isArray(node)) return;
     const url = node.tab_url || node.tabUrl || node.url;
     if (typeof url !== 'string' || !url.includes('/tab/')) return;
+    const songName = node.song_name || node.songName || '';
+    const artistName = node.artist_name || node.artistName || '';
     const title =
-      [node.song_name || node.songName, node.artist_name || node.artistName].filter(Boolean).join(' — ') ||
+      [songName, artistName].filter(Boolean).join(' — ') ||
       node.marketing_type ||
       url;
     const abs = url.startsWith('http') ? url : `https://tabs.ultimate-guitar.com${url.startsWith('/') ? '' : '/'}${url}`;
     if (results.some((row) => row.url === abs)) return;
-    results.push({ title: String(title).trim(), url: abs });
+    const ratingRaw = Number(node.rating);
+    results.push({
+      title: String(title).trim(),
+      url: abs,
+      songName: songName ? String(songName) : undefined,
+      artistName: artistName ? String(artistName) : undefined,
+      type: String(node.type || node.marketing_type || node.tab_type || '').trim() || undefined,
+      rating: Number.isFinite(ratingRaw) && ratingRaw > 0 ? ratingRaw : undefined,
+      key: node.tonality_name || node.tonalityName || undefined,
+      songId: node.song_id != null ? String(node.song_id) : node.songId != null ? String(node.songId) : undefined,
+    });
   });
-  return results.slice(0, 20);
+  return results.slice(0, 40);
 }
 
 function tabFromStore(store) {
@@ -146,7 +158,7 @@ function hrefResults(html) {
     if (!title || results.some((row) => row.url === url)) continue;
     results.push({ title, url });
   }
-  return results.slice(0, 20);
+  return results.slice(0, 40);
 }
 
 export async function fetchHtml(url) {
