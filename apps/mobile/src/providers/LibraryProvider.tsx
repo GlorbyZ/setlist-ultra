@@ -10,6 +10,7 @@ import {
   type LibraryScope,
 } from '@/src/lib/repository';
 import { seedDemoSongIfEmpty } from '@/src/lib/seed';
+import { isNativeDbDead, recoverDatabase } from '@/src/lib/db';
 
 type LibraryContextValue = {
   songs: SongRow[];
@@ -35,22 +36,34 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     setError(null);
-    try {
+    const load = async () => {
       await seedDemoSongIfEmpty();
       const current = await getLibraryScope();
       setScopeState(current);
-      const [songRows, setlistRows, orgRows] = await Promise.all([
-        listSongs(current),
-        listSetlists(current),
-        listOrgs(),
-      ]);
+      const songRows = await listSongs(current);
+      const setlistRows = await listSetlists(current);
+      const orgRows = await listOrgs();
       setSongs(songRows);
       setSetlists(setlistRows);
       setOrgs(orgRows);
+    };
+    try {
+      await load();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load library';
-      console.error('Library init failed:', err);
-      setError(message);
+      if (isNativeDbDead(err)) {
+        try {
+          await recoverDatabase();
+          await load();
+        } catch (retryErr) {
+          const message = retryErr instanceof Error ? retryErr.message : 'Failed to load library';
+          console.error('Library init failed:', retryErr);
+          setError(message);
+        }
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to load library';
+        console.error('Library init failed:', err);
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
