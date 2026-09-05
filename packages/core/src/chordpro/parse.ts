@@ -6,6 +6,10 @@ function uid(): string {
 
 const DIRECTIVE_RE = /^\s*\{([^}:]+)(?::(.*))?\}\s*$/;
 const INLINE_CHORD_RE = /\[([^\]]+)\]/g;
+const CHORD_TOKEN_RE =
+  /[A-G][#b]?(?:maj7|maj|min|m|sus[24]?|dim|aug|add[0-9]|[0-9]|°|ø)*(?:\/[A-G][#b]?)?/g;
+const CHORD_TOKEN_FULL_RE =
+  /^(?:[A-G][#b]?(?:maj7|maj|min|m|sus[24]?|dim|aug|add[0-9]|[0-9]|°|ø)*(?:\/[A-G][#b]?)?|N\.?C\.?|\||\/)$/i;
 
 function classifySection(label: string): SectionKind {
   const n = label.toLowerCase();
@@ -15,6 +19,53 @@ function classifySection(label: string): SectionKind {
   if (n.includes('tab')) return 'tab';
   if (n.includes('comment') || n === 'c') return 'comment';
   return 'unknown';
+}
+
+export function isChordOnlyLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('{') || trimmed.includes('[')) return false;
+  const tokens = trimmed.split(/\s+/);
+  return tokens.length > 0 && tokens.every((token) => CHORD_TOKEN_FULL_RE.test(token));
+}
+
+/** Place `[G]` etc. into the lyric at the same columns as the chord line above it. */
+export function overlayChordLine(chordLine: string, lyric: string): string {
+  const marks: { at: number; chord: string }[] = [];
+  const re = new RegExp(CHORD_TOKEN_RE.source, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(chordLine))) {
+    marks.push({ at: match.index, chord: match[0] });
+  }
+  if (!marks.length) return lyric;
+
+  let padded = lyric.replace(/\t/g, '    ');
+  const lastAt = marks[marks.length - 1]?.at ?? 0;
+  if (padded.length < lastAt) padded = padded.padEnd(lastAt, ' ');
+
+  let out = padded;
+  for (let i = marks.length - 1; i >= 0; i -= 1) {
+    const { at, chord } = marks[i];
+    const idx = Math.min(Math.max(0, at), out.length);
+    out = `${out.slice(0, idx)}[${chord}]${out.slice(idx)}`;
+  }
+  return out;
+}
+
+export function mergeAlignedChordLines(source: string): string {
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const current = lines[i];
+    const next = lines[i + 1];
+    if (isChordOnlyLine(current) && next != null && next.trim() && !isChordOnlyLine(next) && !next.trim().startsWith('{')) {
+      out.push(overlayChordLine(current, next));
+      i += 1;
+      continue;
+    }
+    out.push(current);
+  }
+  return out.join('\n');
 }
 
 function parseLyricLine(raw: string): Line {
@@ -50,7 +101,7 @@ export type ChordProMeta = {
 };
 
 export function parseChordPro(source: string): { document: SongDocument; meta: ChordProMeta } {
-  const lines = (source ?? '').replace(/\r\n/g, '\n').split('\n');
+  const lines = mergeAlignedChordLines(source ?? '').split('\n');
   const meta: ChordProMeta = {};
   const sections: Section[] = [];
   const ctx: { current: Section | null } = { current: null };

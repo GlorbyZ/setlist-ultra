@@ -1,103 +1,104 @@
 import { type Href, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
+import { BrandButton } from '@/src/components/BrandButton';
 import { LiveChrome } from '@/src/components/LiveChrome';
 import { SongViewer } from '@/src/components/SongViewer';
-import { useLibrary } from '@/src/providers/LibraryProvider';
-import { getAppState, getSong, parseSongDocument } from '@/src/lib/repository';
+import { SwipePager } from '@/src/components/SwipePager';
+import { useLiveQueue } from '@/src/hooks/useLiveQueue';
+import { formatClock } from '@/src/lib/format';
+import { parseSongDocument } from '@/src/lib/repository';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
-import { colors } from '@/src/theme';
-import type { SongRow } from '@setlist-ultra/db';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function LiveTab() {
-  const { songs, setlists } = useLibrary();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const [song, setSong] = useState<SongRow | null>(null);
+  const { queue, index, song, loading, go } = useLiveQueue();
   const [transpose, setTranspose] = useState(0);
   const [capo, setCapo] = useState(0);
   const [hideChords, setHideChords] = useState(false);
   const [scrolling, setScrolling] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [fontSize, setFontSize] = useState(18);
 
   useEffect(() => {
-    void (async () => {
-      const state = await getAppState();
-      const id = state.currentSongId ?? songs[0]?.id;
-      const row = id ? await getSong(id) : null;
-      setSong(row);
-      setCapo(row?.capo ?? 0);
-      setTranspose(row?.keyShift ?? 0);
-      setLoading(false);
-      if (row?.midiOnLoad) void sendMidiOnLoad(row.midiOnLoad);
-    })();
-  }, [songs]);
+    if (!song) return;
+    setCapo(song.capo ?? 0);
+    setTranspose(song.keyShift ?? 0);
+    setScrolling(false);
+    if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
+  }, [song?.id]);
 
   useEffect(() => {
     return subscribePedals((action) => {
-      if (action === 'next' && song) {
-        const idx = songs.findIndex((s) => s.id === song.id);
-        const next = songs[idx + 1];
-        if (next) router.push(`/song/${next.id}`);
-      }
-      if (action === 'prev' && song) {
-        const idx = songs.findIndex((s) => s.id === song.id);
-        const prev = songs[idx - 1];
-        if (prev) router.push(`/song/${prev.id}`);
-      }
+      if (action === 'next') go(1);
+      if (action === 'prev') go(-1);
       if (action === 'scrollDown') setScrolling(true);
     });
-  }, [song, songs, router]);
+  }, [go]);
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />;
+  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
 
   if (!song) {
     return (
       <View style={styles.center}>
-        <Text style={styles.body}>Open a song or set to start the live viewer.</Text>
-        <Pressable style={styles.button} onPress={() => router.push('/')}>
-          <Text style={styles.buttonText}>Go to Songs</Text>
-        </Pressable>
+        <Text style={styles.body}>Pick a song or set.</Text>
+        <BrandButton label="Go to Songs" onPress={() => router.push('/')} />
       </View>
     );
   }
 
   const duration = song.duration2 ?? song.durationSeconds ?? 90;
+  const meta = [song.artist, song.originalKey, formatClock(duration)].filter(Boolean).join(' · ');
 
   return (
-    <View style={styles.container}>
-      <LiveChrome
-        title={song.title}
-        subtitle={`${song.artist}${song.originalKey ? ` · ${song.originalKey}` : ''}`}
-        extra={setlists[0] ? `Last set: ${setlists[0].title}` : undefined}
-        onTranspose={(d) => setTranspose((v) => v + d)}
-        onCapo={(d) => setCapo((v) => Math.max(0, v + d))}
-        onToggleLyrics={() => setHideChords((v) => !v)}
-        lyricsOnly={hideChords}
-        onToggleScroll={() => setScrolling((v) => !v)}
-        scrolling={scrolling}
-        onEdit={() => router.push(`/editor/${song.id}` as Href)}
-        onPedal={(action) => {
-          if (action === 'scrollDown') setScrolling(true);
-        }}
-      />
-      <SongViewer
-        document={parseSongDocument(song)}
-        transpose={transpose}
-        capo={capo}
-        hideChords={hideChords}
-        autoScrollSeconds={scrolling ? duration : undefined}
-      />
-    </View>
+    <LiveChrome
+      title={song.title}
+      meta={meta}
+      capo={capo}
+      tempo={song.tempo}
+      onCapo={(d) => setCapo((v) => Math.max(0, v + d))}
+      onEdit={() => router.push(`/editor/${song.id}` as Href)}
+      onPrev={index > 0 ? () => go(-1) : undefined}
+      onNext={index < queue.length - 1 ? () => go(1) : undefined}
+      onTranspose={(d) => setTranspose((v) => v + d)}
+      onToggleLyrics={() => setHideChords((v) => !v)}
+      lyricsOnly={hideChords}
+      onToggleScroll={() => setScrolling((v) => !v)}
+      scrolling={scrolling}
+      onZoom={(d) => setFontSize((v) => Math.min(32, Math.max(14, v + d * 2)))}
+      onPedal={(action) => {
+        if (action === 'next') go(1);
+        if (action === 'prev') go(-1);
+        if (action === 'scrollDown') setScrolling(true);
+      }}>
+      <SwipePager onPrev={index > 0 ? () => go(-1) : undefined} onNext={index < queue.length - 1 ? () => go(1) : undefined}>
+        <SongViewer
+          document={parseSongDocument(song)}
+          transpose={transpose}
+          capo={capo}
+          hideChords={hideChords}
+          autoScrollSeconds={scrolling ? duration : undefined}
+          fontSize={fontSize}
+        />
+      </SwipePager>
+    </LiveChrome>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  body: { color: colors.muted, textAlign: 'center', marginBottom: 16 },
-  button: { backgroundColor: colors.accent, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  buttonText: { color: colors.accentText, fontWeight: '700' },
-});
+function makeStyles(t: AppTheme) {
+  return {
+    center: {
+      flex: 1,
+      backgroundColor: t.bg,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      padding: 24,
+    },
+    body: { color: t.muted, textAlign: 'center' as const, marginBottom: 16 },
+  };
+}

@@ -1,53 +1,95 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { Text } from 'react-native';
+import { type ComponentProps } from 'react';
+import { type ColorValue, View } from 'react-native';
 
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { colors } from '@/src/theme';
+import { BrandMark } from '@/src/components/BrandMark';
+import { BRAND_GRADIENT, useTheme } from '@/src/theme';
 
-function TabBarIcon({ label, color }: { label: string; color: string | { toString(): string } }) {
-  return <Text style={{ fontSize: 18, color: String(color) }}>{label}</Text>;
+function TabIcon({
+  name,
+  color,
+  size,
+  focused,
+}: {
+  name: ComponentProps<typeof Ionicons>['name'];
+  color: ColorValue;
+  size: number;
+  focused: boolean;
+}) {
+  return (
+    <View style={{ alignItems: 'center', width: 48 }}>
+      <Ionicons name={name} size={size} color={color} />
+      {focused ? (
+        <LinearGradient
+          colors={[...BRAND_GRADIENT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ marginTop: 4, height: 2, width: 22, borderRadius: 1 }}
+        />
+      ) : (
+        <View style={{ marginTop: 4, height: 2, width: 22 }} />
+      )}
+    </View>
+  );
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { theme } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.accent,
-        headerStyle: { backgroundColor: colors.panel },
-        headerTintColor: colors.text,
-        tabBarStyle: { backgroundColor: colors.panel, borderTopColor: colors.border },
-        tabBarInactiveTintColor: Colors[colorScheme ?? 'dark'].tabIconDefault,
+        headerTitle: () => <BrandMark />,
+        headerTitleAlign: 'center',
+        tabBarActiveTintColor: theme.accent,
+        tabBarInactiveTintColor: theme.muted,
+        tabBarActiveBackgroundColor: 'transparent',
+        headerStyle: { backgroundColor: theme.bg },
+        headerShadowVisible: false,
+        headerTintColor: theme.text,
+        tabBarStyle: {
+          backgroundColor: theme.bg,
+          borderTopColor: theme.border,
+          height: 62,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Songs',
-          tabBarIcon: ({ color }) => <TabBarIcon label="♪" color={String(color)} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="musical-notes" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="sets"
         options={{
           title: 'Sets',
-          tabBarIcon: ({ color }) => <TabBarIcon label="☰" color={String(color)} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="list" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="live"
         options={{
           title: 'Live',
-          tabBarIcon: ({ color }) => <TabBarIcon label="▶" color={String(color)} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="play" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <TabBarIcon label="⚙" color={String(color)} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="settings-outline" color={color} size={size} focused={focused} />
+          ),
         }}
       />
     </Tabs>

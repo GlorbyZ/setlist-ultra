@@ -6,17 +6,17 @@ import {
   FlatList,
   Pressable,
   ScrollView,
-  StyleSheet,
   TextInput,
   View,
 } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { fingerprintContent, parseChordPro } from '@setlist-ultra/core';
+import { BrandButton } from '@/src/components/BrandButton';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import {
   createBlankSong,
-  importSbpArchive,
+  importAnyChartFile,
   insertLibrarySong,
   saveSongFromUg,
 } from '@/src/lib/repository';
@@ -24,11 +24,13 @@ import { importUgTab, searchUgTabs, type UgSearchResult } from '@/src/lib/ug-api
 import { config } from '@/src/lib/config';
 import { pickBinaryFile, pickImage } from '@/src/lib/files';
 import { lookupRemoteChart } from '@/src/lib/hosted';
-import { colors } from '@/src/theme';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function ImportScreen() {
   const router = useRouter();
   const { refresh } = useLibrary();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [tab, setTab] = useState<'online' | 'paste' | 'file'>('file');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UgSearchResult[]>([]);
@@ -53,7 +55,10 @@ export default function ImportScreen() {
       setResults(rows);
       if (!rows.length) Alert.alert('No results', 'Try another search or paste a UG tab URL below.');
     } catch (error) {
-      Alert.alert('Search failed', `${error instanceof Error ? error.message : 'Unknown error'}\n\nProxy: ${config.ugProxyUrl}`);
+      Alert.alert(
+        'Search failed',
+        `${error instanceof Error ? error.message : 'Unknown error'}\n\nProxy: ${config.ugProxyUrl}`,
+      );
     } finally {
       setSearching(false);
     }
@@ -92,28 +97,14 @@ export default function ImportScreen() {
     try {
       const picked = await pickBinaryFile();
       if (!picked) return;
-      const name = picked.name.toLowerCase();
-      if (name.endsWith('.sbp') || name.endsWith('.sbpbackup') || name.endsWith('.zip')) {
-        const result = await importSbpArchive(picked.bytes, picked.name);
-        await refresh();
-        Alert.alert('Imported', `${result.songs} songs, ${result.sets} sets`);
-        router.back();
+      const result = await importAnyChartFile(picked.bytes, picked.name);
+      await refresh();
+      if (result.kind === 'song' && result.songId) {
+        await afterImport(result.songId);
         return;
       }
-      const text = new TextDecoder().decode(picked.bytes);
-      const parsed = parseChordPro(text);
-      const songId = await insertLibrarySong({
-        title: parsed.meta.title || picked.name.replace(/\.[^.]+$/, ''),
-        artist: parsed.meta.artist || '',
-        originalKey: parsed.meta.key,
-        capo: parsed.meta.capo,
-        tempo: parsed.meta.tempo,
-        chordpro: text,
-        document: parsed.document,
-        importSource: 'editor',
-        sourceProvider: 'chordpro',
-      });
-      await afterImport(songId);
+      Alert.alert('Imported', `${result.songs} songs, ${result.sets} sets`);
+      router.back();
     } catch (error) {
       Alert.alert('Import failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -183,9 +174,7 @@ export default function ImportScreen() {
       {tab === 'file' ? (
         <View>
           <Text style={styles.label}>.sbp / .sbpbackup / ChordPro</Text>
-          <Pressable style={styles.button} onPress={() => void importFile()} disabled={busy}>
-            {busy ? <ActivityIndicator color={colors.accentText} /> : <Text style={styles.buttonText}>Choose file</Text>}
-          </Pressable>
+          <BrandButton label="Choose file" onPress={() => void importFile()} busy={busy} />
           <Pressable style={styles.ghost} onPress={() => void createNew()}>
             <Text style={styles.ghostText}>Create empty song</Text>
           </Pressable>
@@ -196,7 +185,7 @@ export default function ImportScreen() {
             value={title}
             onChangeText={setTitle}
             placeholder="New song title"
-            placeholderTextColor={colors.faint}
+            placeholderTextColor={theme.faint}
             style={styles.input}
           />
         </View>
@@ -210,12 +199,12 @@ export default function ImportScreen() {
               value={query}
               onChangeText={setQuery}
               placeholder="Song title or artist"
-              placeholderTextColor={colors.faint}
+              placeholderTextColor={theme.faint}
               style={[styles.input, { flex: 1, marginBottom: 0 }]}
-              onSubmitEditing={runSearch}
+              onSubmitEditing={() => void runSearch()}
             />
-            <Pressable style={styles.searchButton} onPress={runSearch} disabled={searching}>
-              {searching ? <ActivityIndicator color={colors.accentText} /> : <Text style={styles.buttonText}>Go</Text>}
+            <Pressable style={styles.searchButton} onPress={() => void runSearch()} disabled={searching}>
+              {searching ? <ActivityIndicator color={theme.accentText} /> : <Text style={styles.buttonText}>Go</Text>}
             </Pressable>
           </View>
           <FlatList
@@ -223,10 +212,10 @@ export default function ImportScreen() {
             keyExtractor={(item) => item.url}
             scrollEnabled={false}
             renderItem={({ item }) => (
-              <Pressable style={styles.result} disabled={importingUrl === item.url} onPress={() => importUrl(item.url)}>
+              <Pressable style={styles.result} disabled={importingUrl === item.url} onPress={() => void importUrl(item.url)}>
                 <Text style={styles.resultTitle}>{item.title}</Text>
                 <Text style={styles.resultUrl}>{item.url}</Text>
-                {importingUrl === item.url ? <ActivityIndicator style={{ marginTop: 8 }} /> : null}
+                {importingUrl === item.url ? <ActivityIndicator style={{ marginTop: 8 }} color={theme.accent} /> : null}
               </Pressable>
             )}
           />
@@ -235,13 +224,11 @@ export default function ImportScreen() {
             value={directUrl}
             onChangeText={setDirectUrl}
             placeholder="https://tabs.ultimate-guitar.com/tab/..."
-            placeholderTextColor={colors.faint}
+            placeholderTextColor={theme.faint}
             autoCapitalize="none"
             style={styles.input}
           />
-          <Pressable style={styles.button} disabled={!directUrl.trim()} onPress={() => importUrl(directUrl.trim())}>
-            <Text style={styles.buttonText}>Import URL</Text>
-          </Pressable>
+          <BrandButton label="Import URL" onPress={() => void importUrl(directUrl.trim())} disabled={!directUrl.trim()} />
         </View>
       ) : null}
 
@@ -252,61 +239,64 @@ export default function ImportScreen() {
             value={paste}
             onChangeText={setPaste}
             placeholder="{c: Verse}&#10;[G]Hello [C]world"
-            placeholderTextColor={colors.faint}
+            placeholderTextColor={theme.faint}
             multiline
             style={[styles.input, styles.paste]}
           />
-          <Pressable style={styles.button} disabled={!paste.trim() || busy} onPress={() => void importPaste()}>
-            <Text style={styles.buttonText}>Save to library</Text>
-          </Pressable>
+          <BrandButton label="Save to library" onPress={() => void importPaste()} disabled={!paste.trim()} busy={busy} />
         </View>
       ) : null}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 16, paddingBottom: 40 },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  tab: { flex: 1, backgroundColor: colors.border, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
-  tabOn: { backgroundColor: colors.accent },
-  tabText: { color: colors.text, fontWeight: '700', fontSize: 12 },
-  label: { color: colors.muted, marginBottom: 8, fontWeight: '600' },
-  row: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  input: {
-    backgroundColor: colors.border,
-    color: colors.text,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-  },
-  paste: { minHeight: 220, textAlignVertical: 'top', fontFamily: 'SpaceMono' },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  buttonText: { color: colors.accentText, fontWeight: '700' },
-  searchButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  ghost: { paddingVertical: 10, alignItems: 'center' },
-  ghostText: { color: colors.accent, fontWeight: '700' },
-  result: {
-    backgroundColor: colors.panel,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  resultTitle: { color: colors.text, fontWeight: '700' },
-  resultUrl: { color: colors.faint, marginTop: 4, fontSize: 12 },
-});
+function makeStyles(t: AppTheme) {
+  return {
+    container: { flex: 1, backgroundColor: t.bg },
+    content: { padding: 16, paddingBottom: 40 },
+    tabs: { flexDirection: 'row' as const, gap: 8, marginBottom: 16 },
+    tab: {
+      flex: 1,
+      backgroundColor: t.panel,
+      borderRadius: t.radius.md,
+      paddingVertical: 10,
+      alignItems: 'center' as const,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    tabOn: { borderColor: t.accent, backgroundColor: t.panel },
+    tabText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
+    label: { color: t.muted, marginBottom: 8, fontWeight: '600' as const },
+    row: { flexDirection: 'row' as const, gap: 8, marginBottom: 12 },
+    input: {
+      backgroundColor: t.inputBg,
+      color: t.text,
+      borderRadius: t.radius.md,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 12,
+    },
+    paste: { minHeight: 220, textAlignVertical: 'top' as const, fontFamily: 'SpaceMono' },
+    buttonText: { color: t.accentText, fontWeight: '700' as const },
+    searchButton: {
+      backgroundColor: t.accent,
+      borderRadius: t.radius.md,
+      paddingHorizontal: 16,
+      justifyContent: 'center' as const,
+    },
+    ghost: { paddingVertical: 10, alignItems: 'center' as const },
+    ghostText: { color: t.accent, fontWeight: '700' as const },
+    result: {
+      backgroundColor: t.panel,
+      borderRadius: t.radius.md,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    resultTitle: { color: t.text, fontWeight: '700' as const },
+    resultUrl: { color: t.faint, marginTop: 4, fontSize: 12 },
+  };
+}

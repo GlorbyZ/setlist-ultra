@@ -151,7 +151,8 @@ CREATE TABLE IF NOT EXISTS app_state (
   settings_hive_b64 TEXT,
   next_sbp_song_id INTEGER DEFAULT 1,
   next_sbp_set_id INTEGER DEFAULT 1,
-  next_sbp_item_id INTEGER DEFAULT 1
+  next_sbp_item_id INTEGER DEFAULT 1,
+  theme_id TEXT NOT NULL DEFAULT 'ultra-light'
 );
 
 CREATE TABLE IF NOT EXISTS sync_state (

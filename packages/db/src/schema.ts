@@ -155,6 +155,7 @@ export const appState = sqliteTable('app_state', {
   nextSbpSongId: integer('next_sbp_song_id').default(1),
   nextSbpSetId: integer('next_sbp_set_id').default(1),
   nextSbpItemId: integer('next_sbp_item_id').default(1),
+  themeId: text('theme_id').notNull().default('ultra-light'),
 });
 
 export const syncState = sqliteTable('sync_state', {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -10,17 +10,60 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.setlistultra.app"
+      "bundleIdentifier": "com.setlistultra.app",
+      "infoPlist": {
+        "LSSupportsOpeningDocumentsInPlace": false,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Setlist Ultra chart",
+            "LSHandlerRank": "Owner",
+            "CFBundleTypeRole": "Editor",
+            "LSItemContentTypes": [
+              "com.setlistultra.sbp",
+              "public.zip-archive",
+              "public.plain-text",
+              "public.data"
+            ]
+          }
+        ],
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "com.setlistultra.sbp",
+            "UTTypeDescription": "Songbook Pro set",
+            "UTTypeConformsTo": ["public.data", "public.zip-archive"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["sbp", "sbpbackup"],
+              "public.mime-type": ["application/zip", "application/octet-stream"]
+            }
+          }
+        ]
+      }
     },
     "android": {
       "package": "com.setlistultra.app",
       "adaptiveIcon": {
-        "backgroundColor": "#0f172a",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [
+            { "scheme": "content", "mimeType": "application/octet-stream" },
+            { "scheme": "content", "mimeType": "application/zip" },
+            { "scheme": "content", "mimeType": "text/plain" },
+            { "scheme": "file", "pathPattern": ".*\\\\.sbp" },
+            { "scheme": "file", "pathPattern": ".*\\\\.sbpbackup" },
+            { "scheme": "file", "pathPattern": ".*\\\\.cho" },
+            { "scheme": "file", "pathPattern": ".*\\\\.chopro" },
+            { "scheme": "file", "pathPattern": ".*\\\\.crd" }
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -44,7 +87,22 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0f172a"
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsFileWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true
+          },
+          "androidIntentFilters": [
+            "*/*",
+            "application/zip",
+            "application/octet-stream",
+            "text/plain"
+          ]
         }
       ],
       "expo-sharing",
@@ -58,7 +116,7 @@
     "extra": {
       "googleWebClientId": "${EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID}",
       "googleAndroidClientId": "${EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID}",
-      "ugProxyUrl": "${EXPO_PUBLIC_UG_PROXY_URL}",
+      "ugProxyUrl": "https://ug.bigzay.com",
       "supabaseUrl": "${EXPO_PUBLIC_SUPABASE_URL}",
       "supabaseAnonKey": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}",
       "managerUrl": "${EXPO_PUBLIC_MANAGER_URL}",

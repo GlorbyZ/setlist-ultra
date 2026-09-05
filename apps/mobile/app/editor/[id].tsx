@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   TextInput,
   View,
 } from 'react-native';
@@ -17,13 +16,15 @@ import { KEY_OPTIONS } from '@setlist-ultra/core';
 import { copySongToLibrary, getLibraryScope, getSong, updateSong } from '@/src/lib/repository';
 import { printSong } from '@/src/lib/print';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { colors } from '@/src/theme';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
 
 export default function EditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { refresh, orgs } = useLibrary();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [song, setSong] = useState<SongRow | null>(null);
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
@@ -86,7 +87,7 @@ export default function EditorScreen() {
   };
 
   if (!song) {
-    return <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />;
+    return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
   }
 
   return (
@@ -142,7 +143,7 @@ export default function EditorScreen() {
           value={notes}
           onChangeText={(v) => { setNotes(v); setDirty(true); }}
           placeholder="Stage notes"
-          placeholderTextColor={colors.faint}
+          placeholderTextColor={theme.faint}
         />
         <Text style={styles.label}>ChordPro</Text>
         <TextInput
@@ -174,35 +175,39 @@ export default function EditorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 8,
-  },
-  hint: { color: colors.muted, flex: 1, fontWeight: '600' },
-  save: { backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
-  saveText: { color: colors.accentText, fontWeight: '800' },
-  ghost: { paddingHorizontal: 12, paddingVertical: 10 },
-  ghostText: { color: colors.accent, fontWeight: '700' },
-  content: { padding: 16, paddingBottom: 48 },
-  label: { color: colors.muted, marginBottom: 6, fontWeight: '600' },
-  input: {
-    backgroundColor: colors.border,
-    color: colors.text,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  editor: { minHeight: 280, fontFamily: 'SpaceMono', fontSize: 14 },
-  metaRow: { flexDirection: 'row', gap: 8 },
-  keys: { gap: 8, paddingBottom: 12 },
-  keyChip: { backgroundColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 },
-  keyOn: { backgroundColor: colors.accent },
-  keyText: { color: colors.text, fontWeight: '700' },
-});
+function makeStyles(t: AppTheme) {
+  return {
+    container: { flex: 1, backgroundColor: t.bg },
+    bar: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+      gap: 8,
+    },
+    hint: { color: t.muted, flex: 1, fontWeight: '600' as const },
+    save: { backgroundColor: t.accent, borderRadius: t.radius.md, paddingHorizontal: 16, paddingVertical: 10 },
+    saveText: { color: t.accentText, fontWeight: '800' as const },
+    ghost: { paddingHorizontal: 12, paddingVertical: 10 },
+    ghostText: { color: t.accent, fontWeight: '700' as const },
+    content: { padding: 16, paddingBottom: 48 },
+    label: { color: t.muted, marginBottom: 6, fontWeight: '600' as const },
+    input: {
+      backgroundColor: t.inputBg,
+      color: t.text,
+      borderRadius: t.radius.md,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 12,
+    },
+    editor: { minHeight: 280, fontFamily: 'SpaceMono', fontSize: 14 },
+    metaRow: { flexDirection: 'row' as const, gap: 8 },
+    keys: { gap: 8, paddingBottom: 12 },
+    keyChip: { backgroundColor: t.panel, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 },
+    keyOn: { backgroundColor: t.accent },
+    keyText: { color: t.text, fontWeight: '700' as const },
+  };
+}

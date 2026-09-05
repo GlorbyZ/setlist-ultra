@@ -60,6 +60,15 @@ export async function saveBinaryFile(filename: string, bytes: Uint8Array, mime =
   }
 }
 
+export async function readBytesFromUri(uri: string): Promise<Uint8Array> {
+  const FileSystem = await import('expo-file-system/legacy');
+  const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 export async function pickImage(): Promise<{ uri: string; name: string } | null> {
   const ImagePicker = await import('expo-image-picker');
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();

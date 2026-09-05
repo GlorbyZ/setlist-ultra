@@ -4,6 +4,7 @@ import type { SongDocument } from '@setlist-ultra/core';
 import { transposeDocument } from '@setlist-ultra/core';
 import { ChordLyricLine } from './ChordLyricLine';
 import { Text } from '@/components/Themed';
+import { useTheme } from '@/src/theme';
 
 type Props = {
   document: SongDocument;
@@ -23,6 +24,7 @@ export function SongViewer({
   autoScrollSeconds,
   fontSize = 18,
 }: Props) {
+  const { theme } = useTheme();
   const displayDoc = transpose === 0 ? document : transposeDocument(document, transpose);
   const scrollRef = useRef<ScrollView>(null);
   const [contentH, setContentH] = useState(1);
@@ -63,7 +65,7 @@ export function SongViewer({
             }
             if (section.kind === 'tab') {
               return (
-                <Text key={line.id} style={[styles.tabLine, { fontSize: fontSize - 2 }]}>
+                <Text key={line.id} style={[styles.tabLine, { fontSize: fontSize - 2, color: theme.muted }]}>
                   {line.lyric ?? ''}
                 </Text>
               );
@@ -88,7 +90,7 @@ export function SongViewer({
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    paddingBottom: 120,
+    paddingBottom: 32,
   },
   section: {
     marginBottom: 20,
@@ -108,7 +110,6 @@ const styles = StyleSheet.create({
   },
   tabLine: {
     fontFamily: 'SpaceMono',
-    color: '#94a3b8',
     marginBottom: 2,
   },
 });

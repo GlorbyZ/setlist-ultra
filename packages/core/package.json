@@ -6,7 +6,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/sbp/pack.test.ts"
+    "test": "tsx --test src/sbp/pack.test.ts src/chordpro/parse.test.ts"
   },
   "dependencies": {
     "@tonaljs/tonal": "^4.10.0",

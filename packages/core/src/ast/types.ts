@@ -43,6 +43,7 @@ export type SongDocument = {
 
 export type UgChord = {
   note: string;
+  /** Absolute column on the chord line (spaces from the start of the line). */
   pre_spaces: number;
 };
 

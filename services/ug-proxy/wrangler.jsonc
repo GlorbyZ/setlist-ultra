@@ -1,0 +1,14 @@
+{
+  "name": "setlist-ultra-ug",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-05",
+  "account_id": "ca920695eda5d6f43cef8a5e7068b867",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "ug.bigzay.com/*", "zone_name": "bigzay.com" }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 }
+  }
+}

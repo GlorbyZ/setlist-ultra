@@ -539,6 +539,11 @@ export async function removeSetlistItem(id: string) {
   await db.update(setlistItems).set({ deleted: 1 }).where(eq(setlistItems.id, id));
 }
 
+export async function deleteSetlist(id: string) {
+  const db = await getDatabase();
+  await db.update(setlists).set({ deleted: 1, updatedAt: now() }).where(eq(setlists.id, id));
+}
+
 export async function setlistDuration(setlistId: string): Promise<number> {
   const items = await getSetlistItems(setlistId);
   const songIds = items.map((i) => i.songId).filter(Boolean) as string[];
@@ -835,6 +840,29 @@ export async function importSbpArchive(bytes: Uint8Array, filename?: string, sco
     hashOk: parsed.hashOk,
     kind: parsed.kind,
   };
+}
+
+export async function importAnyChartFile(bytes: Uint8Array, filename?: string) {
+  const name = (filename ?? 'import.sbp').toLowerCase();
+  if (name.endsWith('.sbp') || name.endsWith('.sbpbackup') || name.endsWith('.zip')) {
+    const result = await importSbpArchive(bytes, filename);
+    return { kind: 'archive' as const, songId: undefined, songs: result.songs, sets: result.sets, hashOk: result.hashOk };
+  }
+
+  const text = new TextDecoder().decode(bytes);
+  const parsed = parseChordPro(text);
+  const songId = await insertLibrarySong({
+    title: parsed.meta.title || (filename ?? 'Imported').replace(/\.[^.]+$/, ''),
+    artist: parsed.meta.artist || '',
+    originalKey: parsed.meta.key,
+    capo: parsed.meta.capo,
+    tempo: parsed.meta.tempo,
+    chordpro: text,
+    document: parsed.document,
+    importSource: 'editor',
+    sourceProvider: 'chordpro',
+  });
+  return { kind: 'song' as const, songId, songs: 1, sets: 0, hashOk: true };
 }
 
 export async function exportSbpBytes(kind: 'backup' | 'set', setId?: string) {

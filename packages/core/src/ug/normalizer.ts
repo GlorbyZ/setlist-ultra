@@ -4,23 +4,11 @@ function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function chordsToSlots(chords: { note: string; pre_spaces: number }[], lyric?: string): ChordSlot[] {
-  if (!chords.length) return [];
-
-  let position = 0;
-  const slots: ChordSlot[] = [];
-
-  for (const chord of chords) {
-    position += chord.pre_spaces;
-    slots.push({ at: position, chord: chord.note });
-    position += 1;
-  }
-
-  if (lyric) {
-    return slots.filter((slot) => slot.at <= lyric.length);
-  }
-
-  return slots;
+function chordsToSlots(chords: { note: string; pre_spaces: number }[]): ChordSlot[] {
+  return chords.map((chord) => ({
+    at: Math.max(0, chord.pre_spaces),
+    chord: chord.note,
+  }));
 }
 
 function pairUgLines(lines: UgLine[]): Line[] {
@@ -48,7 +36,7 @@ function pairUgLines(lines: UgLine[]): Line[] {
         id: uid(),
         kind: 'paired',
         lyric: next.lyric,
-        slots: chordsToSlots(current.chords, next.lyric),
+        slots: chordsToSlots(current.chords),
       });
       i += 2;
       continue;

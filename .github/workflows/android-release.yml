@@ -12,6 +12,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_UG_PROXY_URL: https://ug.bigzay.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4

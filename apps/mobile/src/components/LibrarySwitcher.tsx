@@ -1,12 +1,13 @@
 import { type Href, Link } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { colors } from '@/src/theme';
+import { useThemedStyles, type AppTheme } from '@/src/theme';
 
 export function LibrarySwitcher() {
   const { scope, orgs, setScope } = useLibrary();
+  const styles = useThemedStyles(makeStyles);
   const orgName = orgs.find((o) => o.id === scope.orgId)?.name;
 
   return (
@@ -33,14 +34,18 @@ export function LibrarySwitcher() {
   );
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  chip: {
-    backgroundColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  chipOn: { backgroundColor: colors.accent },
-  chipText: { color: colors.text, fontWeight: '700', fontSize: 12 },
-});
+function makeStyles(t: AppTheme) {
+  return {
+    row: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 12 },
+    chip: {
+      backgroundColor: t.panel,
+      borderRadius: t.radius.sm,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    chipOn: { backgroundColor: t.accent, borderColor: t.accent },
+    chipText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
+  };
+}

@@ -15,6 +15,13 @@ export async function getDatabase() {
   for (const statement of statements) {
     await sqlite.execAsync(statement);
   }
+  try {
+    await sqlite.execAsync(
+      `ALTER TABLE app_state ADD COLUMN theme_id TEXT NOT NULL DEFAULT 'ultra-light'`,
+    );
+  } catch {
+    /* column already exists */
+  }
   dbInstance = drizzle(sqlite, { schema });
   return dbInstance;
 }
