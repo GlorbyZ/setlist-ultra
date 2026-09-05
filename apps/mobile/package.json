@@ -1,7 +1,7 @@
 {
   "name": "mobile",
   "main": "expo-router/entry",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "scripts": {
     "preflight": "powershell -ExecutionPolicy Bypass -File ./scripts/preflight.ps1",

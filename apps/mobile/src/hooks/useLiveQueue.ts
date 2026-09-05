@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 
+import { isNativeDbDead, recoverDatabase } from '@/src/lib/db';
 import {
   getAppState,
   getSetlistItems,
   getSong,
+  getSongsByIds,
   patchAppState,
 } from '@/src/lib/repository';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -17,39 +19,68 @@ export function useLiveQueue(preferredSongId?: string) {
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    const state = await getAppState();
-    let list: SongRow[] = songs;
-    let nextIndex = 0;
+    const load = async () => {
+      const state = await getAppState();
+      let list: SongRow[] = songs;
+      let nextIndex = 0;
 
-    if (state.currentSetlistId) {
-      const items = await getSetlistItems(state.currentSetlistId);
-      const rows = await Promise.all(
-        items.filter((item) => item.itemType === 'song' && item.songId).map((item) => getSong(item.songId as string)),
-      );
-      list = rows.filter(Boolean) as SongRow[];
-      const preferred = preferredSongId ?? state.currentSongId;
-      const fromPreferred = preferred ? list.findIndex((song) => song.id === preferred) : -1;
-      nextIndex = fromPreferred >= 0 ? fromPreferred : Math.min(Math.max(0, state.currentSetIndex ?? 0), Math.max(0, list.length - 1));
-    } else {
-      const preferred = preferredSongId ?? state.currentSongId ?? songs[0]?.id;
-      nextIndex = Math.max(0, list.findIndex((song) => song.id === preferred));
+      if (state.currentSetlistId) {
+        const items = await getSetlistItems(state.currentSetlistId);
+        const songIds = items
+          .filter((item) => item.itemType === 'song' && item.songId)
+          .map((item) => item.songId as string);
+        list = await getSongsByIds(songIds);
+        const preferred = preferredSongId ?? state.currentSongId;
+        const fromPreferred = preferred ? list.findIndex((song) => song.id === preferred) : -1;
+        nextIndex = fromPreferred >= 0 ? fromPreferred : Math.min(Math.max(0, state.currentSetIndex ?? 0), Math.max(0, list.length - 1));
+      } else {
+        const preferred = preferredSongId ?? state.currentSongId;
+        if (preferred) {
+          const fromLibrary = songs.find((song) => song.id === preferred);
+          const row = fromLibrary ?? (await getSong(preferred));
+          list = fromLibrary ? songs : row ? [row, ...songs.filter((song) => song.id !== row.id)] : songs;
+          nextIndex = Math.max(0, list.findIndex((song) => song.id === preferred));
+        } else {
+          list = songs;
+          nextIndex = 0;
+        }
+      }
+
+      setQueue(list);
+      setIndex(list.length ? nextIndex : 0);
+    };
+
+    try {
+      await load();
+    } catch (error) {
+      console.error('Live queue failed:', error);
+      if (isNativeDbDead(error)) {
+        try {
+          await recoverDatabase();
+          await load();
+        } catch (retryError) {
+          console.error('Live queue retry failed:', retryError);
+          setQueue([]);
+          setIndex(0);
+        }
+      } else {
+        setQueue([]);
+        setIndex(0);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    setQueue(list);
-    setIndex(list.length ? nextIndex : 0);
-    setLoading(false);
   }, [preferredSongId, songs]);
+
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      void reload();
-    }, [reload]),
+      void reloadRef.current();
+    }, []),
   );
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
 
   const song = queue[index] ?? null;
 

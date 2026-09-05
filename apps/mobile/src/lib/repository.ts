@@ -96,6 +96,15 @@ export async function getSong(id: string) {
   return rows[0] ?? null;
 }
 
+export async function getSongsByIds(ids: string[]) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return [];
+  const db = await getDatabase();
+  const rows = await db.select().from(songs).where(inArray(songs.id, unique));
+  const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
+  return ids.map((id) => byId[id]).filter(Boolean) as SongRow[];
+}
+
 export async function findChartByHash(contentHash: string) {
   const db = await getDatabase();
   const rows = await db.select().from(charts).where(eq(charts.contentHash, contentHash)).limit(1);
