@@ -120,12 +120,12 @@ function makeStyles(t: AppTheme) {
     },
     dangerText: { color: t.danger, fontWeight: '700' as const, fontSize: 16 },
     drawerRoot: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       zIndex: 40,
       elevation: 40,
     },
     drawerDim: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: 'rgba(10,10,12,0.35)',
     },
     drawerPanel: {
