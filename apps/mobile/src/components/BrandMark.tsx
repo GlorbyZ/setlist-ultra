@@ -2,8 +2,10 @@ import { Image, StyleSheet } from 'react-native';
 
 import { useTheme } from '@/src/theme';
 
-const logoMain = require('../../assets/brand/logo-main.png');
-const logoWhite = require('../../assets/brand/logo-white.png');
+const logoMain = require('../../assets/brand/logo-wordmark.png');
+const logoWhite = require('../../assets/brand/logo-wordmark-white.png');
+
+const WORDMARK_ASPECT = 993 / 415;
 
 export function BrandMark({ height = 32 }: { height?: number }) {
   const { theme } = useTheme();
@@ -12,11 +14,11 @@ export function BrandMark({ height = 32 }: { height?: number }) {
     <Image
       source={light ? logoMain : logoWhite}
       resizeMode="contain"
-      style={[styles.mark, { height, width: height * 4.2 }]}
+      style={[styles.mark, { height, width: Math.round(height * WORDMARK_ASPECT) }]}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  mark: { borderRadius: 2 },
+  mark: { borderRadius: 0 },
 });

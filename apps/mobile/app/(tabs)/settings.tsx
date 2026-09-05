@@ -141,7 +141,11 @@ export default function SettingsScreen() {
       ) : (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Cloud sync is off.</Text>
-          <Text style={styles.cardBody}>Using this device only.</Text>
+          <Text style={styles.cardBody}>Using this device only. Songs stay on this phone.</Text>
+          <Text style={styles.cardBody}>
+            To show Sign in / Sync now, set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY
+            in apps/mobile/.env and rebuild the app.
+          </Text>
         </View>
       )}
 

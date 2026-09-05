@@ -12,10 +12,12 @@ import Animated, {
 import * as SplashScreen from 'expo-splash-screen';
 
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { brand, useTheme } from '@/src/theme';
+import { brand } from '@/src/theme';
 
-const logoMain = require('../../assets/brand/logo-main.png');
-const logoWhite = require('../../assets/brand/logo-white.png');
+const logoMain = require('../../assets/brand/logo-wordmark.png');
+
+const LOGO_WIDTH = 280;
+const LOGO_ASPECT = 993 / 415;
 
 type Props = {
   fontsReady: boolean;
@@ -23,7 +25,6 @@ type Props = {
 };
 
 export function SplashGate({ fontsReady, children }: Props) {
-  const { theme } = useTheme();
   const { loading } = useLibrary();
   const ready = fontsReady && !loading;
   const [visible, setVisible] = useState(true);
@@ -32,15 +33,21 @@ export function SplashGate({ fontsReady, children }: Props) {
   const logo = useSharedValue(0.92);
   const cover = useSharedValue(1);
 
-  const light = theme.id === 'ultra-light';
-  const bg = light ? brand.paper : '#000000';
-
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
   }, []);
 
   useEffect(() => {
-    void SplashScreen.hideAsync();
+    let cancelled = false;
+    const hideNative = () => {
+      if (cancelled) return;
+      void SplashScreen.hideAsync().catch(() => undefined);
+    };
+    const frame = requestAnimationFrame(hideNative);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
   }, []);
 
   useEffect(() => {
@@ -76,9 +83,9 @@ export function SplashGate({ fontsReady, children }: Props) {
     <View style={styles.root}>
       {children}
       {visible ? (
-        <Animated.View style={[styles.overlay, { backgroundColor: bg }, coverStyle]} pointerEvents="none">
+        <Animated.View style={[styles.overlay, coverStyle]} pointerEvents="none" collapsable={false}>
           <Animated.Image
-            source={light ? logoMain : logoWhite}
+            source={logoMain}
             resizeMode="contain"
             style={[styles.logo, logoStyle]}
           />
@@ -94,7 +101,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: brand.paper,
     zIndex: 50,
   },
-  logo: { width: 240, height: 240 },
+  logo: {
+    width: LOGO_WIDTH,
+    height: LOGO_WIDTH / LOGO_ASPECT,
+  },
 });

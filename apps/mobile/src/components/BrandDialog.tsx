@@ -1,4 +1,4 @@
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
@@ -23,7 +23,12 @@ export function BrandDialog({ visible, title, body, actions, onClose }: Props) {
   const buttons = actions?.length ? actions : [{ label: 'OK', onPress: onClose }];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.card} onPress={() => undefined}>
           <Text style={styles.title}>{title}</Text>
@@ -59,11 +64,13 @@ export function ActionSheet({
   onClose: () => void;
 }) {
   const styles = useThemedStyles(makeStyles);
+  if (!visible) return null;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => undefined}>
-          <Text style={styles.title}>{title}</Text>
+    <View style={styles.drawerRoot} pointerEvents="box-none">
+      <Pressable style={styles.drawerDim} onPress={onClose} />
+      <View style={styles.drawerPanel}>
+        <Text style={styles.title}>{title}</Text>
+        <ScrollView keyboardShouldPersistTaps="handled">
           {options.map((option) => (
             <Pressable
               key={option.label}
@@ -78,9 +85,9 @@ export function ActionSheet({
           <Pressable style={styles.sheetRow} onPress={onClose}>
             <Text style={styles.cancel}>Cancel</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
@@ -112,15 +119,30 @@ function makeStyles(t: AppTheme) {
       marginBottom: 12,
     },
     dangerText: { color: t.danger, fontWeight: '700' as const, fontSize: 16 },
-    sheetBackdrop: { flex: 1, backgroundColor: 'rgba(10,10,12,0.45)', justifyContent: 'flex-end' as const },
-    sheet: {
+    drawerRoot: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 40,
+      elevation: 40,
+    },
+    drawerDim: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(10,10,12,0.35)',
+    },
+    drawerPanel: {
+      position: 'absolute' as const,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: '82%' as const,
+      maxWidth: 360,
       backgroundColor: t.bg,
-      borderTopLeftRadius: t.radius.lg,
-      borderTopRightRadius: t.radius.lg,
-      padding: 16,
+      paddingTop: 20,
+      paddingHorizontal: 16,
       paddingBottom: 28,
-      borderWidth: 1,
-      borderColor: t.border,
+      borderLeftWidth: 1,
+      borderLeftColor: t.border,
+      elevation: 8,
+      zIndex: 41,
     },
     sheetRow: { paddingVertical: 14 },
     sheetLabel: { color: t.text, fontSize: 16, fontWeight: '700' as const },
