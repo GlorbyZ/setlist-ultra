@@ -78,7 +78,12 @@ export function LiveChrome({
           ) : null}
         </View>
         {onCapo ? (
-          <Pressable onPress={() => onCapo(1)} onLongPress={() => onCapo(-1)} style={styles.capo}>
+          <Pressable
+            onPress={() => onCapo(1)}
+            onLongPress={() => onCapo(-1)}
+            delayLongPress={280}
+            style={styles.capo}
+            accessibilityLabel={`Capo ${capo}. Tap to raise, long-press to lower.`}>
             <Text style={styles.capoText}>Capo {capo}</Text>
           </Pressable>
         ) : null}
@@ -118,6 +123,16 @@ export function LiveChrome({
               <View style={styles.tool}>
                 <Text style={styles.toolText}>Metro {tempo}</Text>
               </View>
+            ) : null}
+            {onCapo ? (
+              <>
+                <Pressable style={styles.tool} onPress={() => onCapo(-1)}>
+                  <Text style={styles.toolText}>Capo −</Text>
+                </Pressable>
+                <Pressable style={styles.tool} onPress={() => onCapo(1)}>
+                  <Text style={styles.toolText}>Capo +</Text>
+                </Pressable>
+              </>
             ) : null}
             {onTranspose ? (
               <>

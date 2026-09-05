@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Appearance, useColorScheme } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { createContext, useContext } from 'react';
 import * as SecureStore from 'expo-secure-store';
 
@@ -40,14 +40,6 @@ async function writeStoredThemeId(id: ThemeId) {
   }
 }
 
-function applyColorScheme(themeId: ThemeId) {
-  if (themeId === 'system') {
-    Appearance.setColorScheme(null as unknown as 'light');
-    return;
-  }
-  Appearance.setColorScheme(themeId === 'ultra-light' ? 'light' : 'dark');
-}
-
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
   const [themeId, setThemeIdState] = useState<ThemeId>('ultra-light');
@@ -68,7 +60,6 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
       }
       if (cancelled) return;
       setThemeIdState(next);
-      applyColorScheme(next);
     })();
     return () => {
       cancelled = true;
@@ -76,13 +67,20 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setThemeId = useCallback(async (id: ThemeId) => {
-    setThemeIdState(id);
-    applyColorScheme(id);
-    await writeStoredThemeId(id);
     try {
-      await patchAppState({ themeId: id });
-    } catch {
-      /* DB may still be opening */
+      // Do not call Appearance.setColorScheme. Passing null for System NPEs on
+      // several Android RN builds and sends the process to the launcher.
+      // Forced themes are applied through this provider; System reads the OS
+      // scheme from useColorScheme() only.
+      setThemeIdState(id);
+      await writeStoredThemeId(id);
+      try {
+        await patchAppState({ themeId: id });
+      } catch {
+        /* DB may still be opening */
+      }
+    } catch (error) {
+      console.warn('Theme change failed', error);
     }
   }, []);
 

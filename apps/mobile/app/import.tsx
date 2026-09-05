@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Pressable,
   ScrollView,
   TextInput,
@@ -66,13 +67,15 @@ export default function ImportScreen() {
   };
 
   const runSearch = async () => {
-    if (!query.trim()) return;
+    const q = query.trim();
+    if (!q) return;
+    Keyboard.dismiss();
     setSearching(true);
     setSelectedGroup(null);
     setPreviewHit(null);
     setPreviewTab(null);
     try {
-      const rows = await searchUgTabs(query.trim());
+      const rows = await searchUgTabs(q);
       setGroups(groupUgResults(rows));
       if (!rows.length) setDialog({ title: 'No results', body: 'Try another search or paste a UG tab URL below.' });
     } catch (error) {
@@ -200,7 +203,7 @@ export default function ImportScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
       <View style={styles.tabs}>
         {(['file', 'online', 'paste'] as const).map((id) => (
           <Pressable key={id} style={[styles.tab, tab === id && styles.tabOn]} onPress={() => setTab(id)}>
@@ -210,7 +213,7 @@ export default function ImportScreen() {
       </View>
 
       {tab === 'file' ? (
-        <View>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>.sbp / .sbpbackup / ChordPro</Text>
           <BrandButton label="Choose file" onPress={() => void importFile()} busy={busy} />
           <Pressable style={styles.ghost} onPress={() => void createNew()}>
@@ -226,11 +229,11 @@ export default function ImportScreen() {
             placeholderTextColor={theme.faint}
             style={styles.input}
           />
-        </View>
+        </ScrollView>
       ) : null}
 
       {tab === 'online' ? (
-        <View>
+        <View style={styles.online}>
           <Text style={styles.label}>Search Ultimate Guitar</Text>
           <View style={styles.row}>
             <TextInput
@@ -239,6 +242,12 @@ export default function ImportScreen() {
               placeholder="Song title or artist"
               placeholderTextColor={theme.faint}
               style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              returnKeyType="search"
+              blurOnSubmit
+              autoCorrect={false}
+              autoCapitalize="none"
+              enablesReturnKeyAutomatically
+              submitBehavior="blurAndSubmit"
               onSubmitEditing={() => void runSearch()}
             />
             <Pressable style={styles.searchButton} onPress={() => void runSearch()} disabled={searching}>
@@ -246,78 +255,94 @@ export default function ImportScreen() {
             </Pressable>
           </View>
 
-          {previewHit && previewDoc ? (
-            <View style={styles.previewCard}>
-              <Pressable onPress={() => { setPreviewHit(null); setPreviewTab(null); }}>
-                <Text style={styles.ghostText}>← Versions</Text>
-              </Pressable>
-              <Text style={styles.resultTitle}>{previewDoc.meta.title}</Text>
-              <Text style={styles.resultUrl}>
-                {previewDoc.meta.artist}
-                {previewHit.type ? ` · ${previewHit.type}` : ''}
-                {previewHit.key ? ` · ${previewHit.key}` : ''}
-              </Text>
-              <View style={styles.previewTools}>
-                <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v - 1)}>
-                  <Text style={styles.toolText}>Key −</Text>
+          <View style={styles.onlineBody}>
+            {previewHit && previewDoc ? (
+              <View style={styles.previewCard}>
+                <Pressable onPress={() => { setPreviewHit(null); setPreviewTab(null); }}>
+                  <Text style={styles.ghostText}>← Versions</Text>
                 </Pressable>
-                <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v + 1)}>
-                  <Text style={styles.toolText}>Key +</Text>
-                </Pressable>
-                <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => Math.max(0, v - 1))}>
-                  <Text style={styles.toolText}>Capo −</Text>
-                </Pressable>
-                <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => v + 1)}>
-                  <Text style={styles.toolText}>Capo +</Text>
-                </Pressable>
+                <Text style={styles.resultTitle}>{previewDoc.meta.title}</Text>
+                <Text style={styles.resultUrl}>
+                  {previewDoc.meta.artist}
+                  {previewHit.type ? ` · ${previewHit.type}` : ''}
+                  {previewHit.key ? ` · ${previewHit.key}` : ''}
+                </Text>
+                <View style={styles.previewTools}>
+                  <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v - 1)}>
+                    <Text style={styles.toolText}>Key −</Text>
+                  </Pressable>
+                  <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v + 1)}>
+                    <Text style={styles.toolText}>Key +</Text>
+                  </Pressable>
+                  <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => Math.max(0, v - 1))}>
+                    <Text style={styles.toolText}>Capo −</Text>
+                  </Pressable>
+                  <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => Math.min(12, v + 1))}>
+                    <Text style={styles.toolText}>Capo +</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.label}>
+                  Shift {previewShift > 0 ? `+${previewShift}` : previewShift} · Capo {previewCapo}
+                </Text>
+                <View style={styles.previewStage}>
+                  <SongViewer document={previewDoc.document} transpose={previewShift} capo={previewCapo} fontSize={16} />
+                </View>
+                <BrandButton
+                  label="Import"
+                  busy={busy}
+                  onPress={() => void importUrl(previewHit.url, previewShift, previewCapo)}
+                />
               </View>
-              <Text style={styles.label}>
-                Shift {previewShift > 0 ? `+${previewShift}` : previewShift} · Capo {previewCapo}
-              </Text>
-              <View style={styles.previewStage}>
-                <SongViewer document={previewDoc.document} transpose={previewShift} capo={previewCapo} fontSize={16} />
-              </View>
-              <BrandButton
-                label="Import"
-                busy={busy}
-                onPress={() => void importUrl(previewHit.url, previewShift, previewCapo)}
+            ) : selectedGroup ? (
+              <FlatList
+                data={selectedGroup.versions}
+                keyExtractor={(item) => item.url}
+                keyboardShouldPersistTaps="handled"
+                ListHeaderComponent={
+                  <View style={{ marginBottom: 8 }}>
+                    <Pressable onPress={() => setSelectedGroup(null)}>
+                      <Text style={styles.ghostText}>← Songs</Text>
+                    </Pressable>
+                    <Text style={styles.resultTitle}>{selectedGroup.songName}</Text>
+                    <Text style={styles.resultUrl}>
+                      {selectedGroup.artistName || 'Unknown artist'} · {selectedGroup.versions.length} version
+                      {selectedGroup.versions.length === 1 ? '' : 's'}
+                    </Text>
+                    {loadingPreview ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : null}
+                  </View>
+                }
+                renderItem={({ item }) => (
+                  <Pressable style={styles.result} onPress={() => void openVersion(item)}>
+                    <Text style={styles.resultTitle}>{item.type || 'Version'}</Text>
+                    <Text style={styles.resultUrl}>
+                      {[item.rating != null ? `${item.rating.toFixed(1)}★` : null, item.key].filter(Boolean).join(' · ') ||
+                        'Tap to preview'}
+                    </Text>
+                  </Pressable>
+                )}
               />
-            </View>
-          ) : selectedGroup ? (
-            <View>
-              <Pressable onPress={() => setSelectedGroup(null)}>
-                <Text style={styles.ghostText}>← Songs</Text>
-              </Pressable>
-              <Text style={styles.resultTitle}>{selectedGroup.songName}</Text>
-              <Text style={styles.resultUrl}>{selectedGroup.artistName || 'Unknown artist'}</Text>
-              {loadingPreview ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : null}
-              {selectedGroup.versions.map((hit) => (
-                <Pressable key={hit.url} style={styles.result} onPress={() => void openVersion(hit)}>
-                  <Text style={styles.resultTitle}>{hit.type || 'Version'}</Text>
-                  <Text style={styles.resultUrl}>
-                    {[hit.rating != null ? `${hit.rating.toFixed(1)}★` : null, hit.key, hit.url.replace(/^https?:\/\//, '')]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <FlatList
-              data={groups}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable style={styles.result} onPress={() => setSelectedGroup(item)}>
-                  <Text style={styles.resultTitle}>{item.songName}</Text>
-                  <Text style={styles.resultUrl}>
-                    {item.artistName || 'Unknown artist'} · {item.versions.length} version
-                    {item.versions.length === 1 ? '' : 's'}
-                  </Text>
-                </Pressable>
-              )}
-            />
-          )}
+            ) : (
+              <FlatList
+                data={groups}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  searching ? null : (
+                    <Text style={styles.label}>Search a title, then pick a song and a version.</Text>
+                  )
+                }
+                renderItem={({ item }) => (
+                  <Pressable style={styles.result} onPress={() => setSelectedGroup(item)}>
+                    <Text style={styles.resultTitle}>{item.songName}</Text>
+                    <Text style={styles.resultUrl}>
+                      {item.artistName || 'Unknown artist'} · {item.versions.length} version
+                      {item.versions.length === 1 ? '' : 's'}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            )}
+          </View>
 
           <Text style={styles.label}>Or paste tab URL</Text>
           <TextInput
@@ -326,6 +351,10 @@ export default function ImportScreen() {
             placeholder="https://tabs.ultimate-guitar.com/tab/..."
             placeholderTextColor={theme.faint}
             autoCapitalize="none"
+            returnKeyType="go"
+            onSubmitEditing={() => {
+              if (directUrl.trim()) void importUrl(directUrl.trim());
+            }}
             style={styles.input}
           />
           <BrandButton label="Import URL" onPress={() => void importUrl(directUrl.trim())} disabled={!directUrl.trim()} busy={busy} />
@@ -333,7 +362,7 @@ export default function ImportScreen() {
       ) : null}
 
       {tab === 'paste' ? (
-        <View>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>ChordPro</Text>
           <TextInput
             value={paste}
@@ -344,7 +373,7 @@ export default function ImportScreen() {
             style={[styles.input, styles.paste]}
           />
           <BrandButton label="Save to library" onPress={() => void importPaste()} disabled={!paste.trim()} busy={busy} />
-        </View>
+        </ScrollView>
       ) : null}
 
       <BrandDialog
@@ -354,14 +383,16 @@ export default function ImportScreen() {
         onClose={() => setDialog(null)}
         actions={[{ label: 'OK', onPress: () => setDialog(null) }]}
       />
-    </ScrollView>
+    </View>
   );
 }
 
 function makeStyles(t: AppTheme) {
   return {
-    container: { flex: 1, backgroundColor: t.bg },
-    content: { padding: 16, paddingBottom: 40 },
+    container: { flex: 1, backgroundColor: t.bg, padding: 16 },
+    content: { paddingBottom: 40 },
+    online: { flex: 1 },
+    onlineBody: { flex: 1, minHeight: 180, marginBottom: 12 },
     tabs: { flexDirection: 'row' as const, gap: 8, marginBottom: 16 },
     tab: {
       flex: 1,
@@ -406,7 +437,7 @@ function makeStyles(t: AppTheme) {
     },
     resultTitle: { color: t.text, fontWeight: '700' as const },
     resultUrl: { color: t.faint, marginTop: 4, fontSize: 12 },
-    previewCard: { marginBottom: 16 },
+    previewCard: { flex: 1, marginBottom: 8 },
     previewTools: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginVertical: 12 },
     tool: {
       backgroundColor: t.panel,
@@ -417,6 +448,6 @@ function makeStyles(t: AppTheme) {
       paddingVertical: 8,
     },
     toolText: { color: t.text, fontWeight: '600' as const, fontSize: 13 },
-    previewStage: { height: 280, borderWidth: 1, borderColor: t.border, borderRadius: t.radius.md, overflow: 'hidden' as const, marginBottom: 12 },
+    previewStage: { flex: 1, minHeight: 180, borderWidth: 1, borderColor: t.border, borderRadius: t.radius.md, overflow: 'hidden' as const, marginBottom: 12 },
   };
 }

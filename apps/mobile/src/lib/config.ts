@@ -28,5 +28,5 @@ export const config = {
 };
 
 export function isHostedConfigured(): boolean {
-  return Boolean(config.supabaseUrl && config.supabaseAnonKey);
+  return Boolean(config.supabaseUrl.trim() && config.supabaseAnonKey.trim());
 }

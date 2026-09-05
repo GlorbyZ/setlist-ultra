@@ -377,7 +377,7 @@ function sourceKind(song: SongRow): Exclude<SourceId, 'all'> {
 
 function makeStyles(t: AppTheme) {
   return {
-    container: { flex: 1, backgroundColor: t.bg, flexDirection: 'row' as const },
+    container: { flex: 1, backgroundColor: t.bg, flexDirection: 'row' as const, position: 'relative' as const },
     pane: { flex: 1 },
     listPane: { maxWidth: 420, borderRightWidth: 1, borderRightColor: t.border },
     toolbar: { padding: 16, gap: 8 },

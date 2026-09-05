@@ -44,12 +44,14 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerTitle: () => <BrandMark height={32} />,
+        headerLeft: () => <BrandMark height={56} />,
+        headerTitle: () => null,
         headerTitleAlign: 'left',
+        headerLeftContainerStyle: { paddingLeft: 4, justifyContent: 'center' },
+        headerStyle: { backgroundColor: theme.bg, height: 64 + insets.top },
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
         tabBarActiveBackgroundColor: 'transparent',
-        headerStyle: { backgroundColor: theme.bg },
         headerShadowVisible: false,
         headerTintColor: theme.text,
         tabBarStyle: {
