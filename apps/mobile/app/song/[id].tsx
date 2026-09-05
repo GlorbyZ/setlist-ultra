@@ -1,6 +1,7 @@
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { transposeKeyName } from '@setlist-ultra/core';
 
 import { Text } from '@/components/Themed';
 import { LiveChrome } from '@/src/components/LiveChrome';
@@ -12,6 +13,13 @@ import { parseSongDocument, patchAppState } from '@/src/lib/repository';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
+
+function wrapCapo(value: number, delta: number) {
+  const next = value + delta;
+  if (next < 0) return 12;
+  if (next > 12) return 0;
+  return next;
+}
 
 export default function SongScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,9 +51,14 @@ export default function SongScreen() {
     });
   }, [go]);
 
+  const chart = useMemo(
+    () => (song ? parseSongDocument(song) : null),
+    [song?.id, song?.contentAst, song?.chordpro],
+  );
+
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
 
-  if (!song) {
+  if (!song || !chart) {
     return (
       <View style={styles.center}>
         <Text>Song not found.</Text>
@@ -54,7 +67,8 @@ export default function SongScreen() {
   }
 
   const duration = song.duration2 ?? song.durationSeconds ?? 90;
-  const meta = [song.artist, song.originalKey, formatClock(duration)].filter(Boolean).join(' · ');
+  const soundingKey = transposeKeyName(song.originalKey, transpose) ?? song.originalKey;
+  const meta = [song.artist, soundingKey, formatClock(duration)].filter(Boolean).join(' · ');
 
   return (
     <LiveChrome
@@ -62,7 +76,7 @@ export default function SongScreen() {
       meta={meta}
       capo={capo}
       tempo={song.tempo}
-      onCapo={(d) => setCapo((v) => Math.max(0, v + d))}
+      onCapo={(d) => setCapo((v) => wrapCapo(v, d))}
       onEdit={() => router.push(`/editor/${song.id}` as Href)}
       onPrev={index > 0 ? () => go(-1) : undefined}
       onNext={index < queue.length - 1 ? () => go(1) : undefined}
@@ -80,12 +94,13 @@ export default function SongScreen() {
       }}>
       <SwipePager onPrev={index > 0 ? () => go(-1) : undefined} onNext={index < queue.length - 1 ? () => go(1) : undefined}>
         <SongViewer
-          document={parseSongDocument(song)}
+          document={chart}
           transpose={transpose}
           capo={capo}
           hideChords={hideChords}
           autoScrollSeconds={scrolling ? duration : undefined}
           fontSize={fontSize}
+          onFontSizeChange={setFontSize}
         />
       </SwipePager>
     </LiveChrome>

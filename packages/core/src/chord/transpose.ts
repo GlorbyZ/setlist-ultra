@@ -1,18 +1,77 @@
-import { Interval, Note } from '@tonaljs/tonal';
+import { Note } from '@tonaljs/tonal';
 import type { ChordSlot, SongDocument } from '../ast/types';
+import { wrapSemitones } from '../key';
 
 const CHORD_RE = /^[A-G](?:#|b)?(?:maj|min|m|dim|aug|sus|add|mmaj|m7b5)?[0-9#b/()]*$/i;
 
-function transposeChord(chord: string, semitones: number): string {
-  if (!chord || semitones === 0) return chord;
-  const rootMatch = chord.match(/^([A-G](?:#|b)?)/);
-  if (!rootMatch) return chord;
+const SHARP_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const FLAT_NOTES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
-  const root = rootMatch[1];
-  const suffix = chord.slice(root.length);
-  const transposed = Note.transpose(root, Interval.fromSemitones(semitones));
-  if (!transposed) return chord;
-  return `${transposed}${suffix}`;
+function prefersFlats(note: string): boolean {
+  return /b|♭/.test(note) && !/#|♯/.test(note);
+}
+
+/** Guitar-friendly pitch: never Fb / E# / Cb / B#. */
+export function spellPitch(note: string, preferFlats = false): string {
+  const cleaned = note.trim().replace(/♯/g, '#').replace(/♭/g, 'b');
+  const chroma = Note.chroma(cleaned);
+  if (chroma == null) return cleaned;
+  const flats = preferFlats || prefersFlats(cleaned);
+  return (flats ? FLAT_NOTES : SHARP_NOTES)[wrapSemitones(chroma)];
+}
+
+export function transposePitch(note: string, semitones: number, preferFlats = prefersFlats(note)): string {
+  const cleaned = note.trim().replace(/♯/g, '#').replace(/♭/g, 'b');
+  const chroma = Note.chroma(cleaned);
+  if (chroma == null) return cleaned;
+  return spellPitch(SHARP_NOTES[wrapSemitones(chroma + semitones)], preferFlats);
+}
+
+function transposeChordToken(token: string, semitones: number): string {
+  if (!token || /^n\.?c\.?$/i.test(token)) return token;
+  const match = token.match(/^([A-G](?:#|b|♯|♭)?)(.*)$/);
+  if (!match) return token;
+  return `${transposePitch(match[1], semitones)}${match[2]}`;
+}
+
+export function transposeChord(chord: string, semitones: number): string {
+  if (!chord || semitones === 0) {
+    if (!chord) return chord;
+    return chord.includes('/')
+      ? chord.split('/').map((part) => transposeChordToken(part, 0)).join('/')
+      : transposeChordToken(chord, 0);
+  }
+  return chord.split('/').map((part) => transposeChordToken(part, semitones)).join('/');
+}
+
+export function parseKeyName(value: string | null | undefined): { tonic: string; minor: boolean } | null {
+  if (!value?.trim()) return null;
+  let text = value
+    .trim()
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/\s+sharp\b/gi, '#')
+    .replace(/\s+flat\b/gi, 'b')
+    .replace(/\s+/g, ' ')
+    .replace(/([A-G]) b\b/i, '$1b');
+
+  const minor = /\b(minor|min)\b/i.test(text) || /^(?:[A-G](?:#|b)?)m$/i.test(text.replace(/\s+/g, ''));
+  text = text.replace(/\b(major|maj|minor|min)\b/gi, '').replace(/\s+/g, '');
+  const match = text.match(/^([A-G](?:#|b)?)m?$/i);
+  if (!match) return null;
+  return { tonic: `${match[1][0].toUpperCase()}${match[1].slice(1)}`, minor };
+}
+
+export function formatKeyName(tonic: string, minor: boolean): string {
+  const note = spellPitch(tonic, prefersFlats(tonic) || (minor && /[b♭]/.test(tonic)));
+  return minor ? `${note}m` : note;
+}
+
+export function transposeKeyName(value: string | null | undefined, semitones: number): string | undefined {
+  const parsed = parseKeyName(value);
+  if (!parsed) return value?.trim() || undefined;
+  const tonic = transposePitch(parsed.tonic, semitones, prefersFlats(parsed.tonic));
+  return formatKeyName(tonic, parsed.minor);
 }
 
 export function transposeSlots(slots: ChordSlot[] | undefined, semitones: number): ChordSlot[] | undefined {

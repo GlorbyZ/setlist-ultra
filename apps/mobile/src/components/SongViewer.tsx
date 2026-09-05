@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import type { SongDocument } from '@setlist-ultra/core';
 import { transposeDocument } from '@setlist-ultra/core';
 import { ChordLyricLine } from './ChordLyricLine';
@@ -13,6 +15,7 @@ type Props = {
   hideChords?: boolean;
   autoScrollSeconds?: number;
   fontSize?: number;
+  onFontSizeChange?: (size: number) => void;
   onScrollBy?: (delta: number) => void;
 };
 
@@ -23,10 +26,13 @@ export function SongViewer({
   hideChords = false,
   autoScrollSeconds,
   fontSize = 18,
+  onFontSizeChange,
 }: Props) {
   const { theme } = useTheme();
   const displayDoc = transpose === 0 ? document : transposeDocument(document, transpose);
   const scrollRef = useRef<ScrollView>(null);
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
   const [contentH, setContentH] = useState(1);
   const [layoutH, setLayoutH] = useState(1);
 
@@ -43,9 +49,21 @@ export function SongViewer({
     return () => clearInterval(id);
   }, [autoScrollSeconds, contentH, layoutH, document]);
 
-  return (
+  const applyPinch = (scale: number) => {
+    if (!onFontSizeChange || !Number.isFinite(scale) || scale <= 0) return;
+    onFontSizeChange(Math.round(Math.min(32, Math.max(14, fontSizeRef.current * scale))));
+  };
+
+  const pinch = Gesture.Pinch()
+    .enabled(Boolean(onFontSizeChange))
+    .onEnd((event) => {
+      runOnJS(applyPinch)(event.scale);
+    });
+
+  const scroll = (
     <ScrollView
       ref={scrollRef}
+      style={styles.fill}
       contentContainerStyle={styles.container}
       onContentSizeChange={(_, h) => setContentH(h)}
       onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
@@ -85,9 +103,13 @@ export function SongViewer({
       ))}
     </ScrollView>
   );
+
+  if (!onFontSizeChange) return scroll;
+  return <GestureDetector gesture={pinch}>{scroll}</GestureDetector>;
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   container: {
     padding: 20,
     paddingBottom: 32,

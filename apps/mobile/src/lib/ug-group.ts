@@ -1,0 +1,88 @@
+export type UgSearchHit = {
+  title: string;
+  url: string;
+  songName?: string;
+  artistName?: string;
+  type?: string;
+  rating?: number;
+  key?: string;
+  songId?: string;
+};
+
+export type UgSongGroup = {
+  id: string;
+  songName: string;
+  artistName: string;
+  versions: UgSearchHit[];
+};
+
+function titleCaseWords(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+export function parseUgTabUrl(url: string): { songName?: string; artistName?: string } {
+  try {
+    const path = new URL(url).pathname;
+    const match = path.match(/\/tab\/([^/]+)\/([^/]+)/i);
+    if (!match) return {};
+    const artistName = titleCaseWords(decodeURIComponent(match[1]).replace(/-/g, ' '));
+    const slug = decodeURIComponent(match[2]).replace(/-/g, ' ');
+    const songName = titleCaseWords(
+      slug.replace(/\b(chords|tabs|official|bass|drum|ukulele|solo|intro|video|pro)\b.*$/i, '').replace(/\s+\d+$/, ''),
+    );
+    return { artistName, songName };
+  } catch {
+    return {};
+  }
+}
+
+function parseHitTitle(title: string) {
+  const sep = title.includes(' — ') ? ' — ' : title.includes(' - ') ? ' - ' : title.includes(' by ') ? ' by ' : null;
+  if (!sep) return { songName: title.trim(), artistName: '' };
+  if (sep === ' by ') {
+    const [songName, artistName] = title.split(/ by /i);
+    return { songName: (songName ?? title).trim(), artistName: (artistName ?? '').trim() };
+  }
+  const [songName, artistName] = title.split(sep);
+  return { songName: (songName ?? title).trim(), artistName: (artistName ?? '').trim() };
+}
+
+function typeRank(type?: string) {
+  const value = (type ?? '').toLowerCase();
+  if (value.includes('official')) return 0;
+  if (value.includes('chord')) return 1;
+  if (value === 'tab' || value.includes('tabs')) return 2;
+  if (value.includes('pro') || value.includes('video')) return 5;
+  return 3;
+}
+
+export function sortUgVersions(versions: UgSearchHit[]): UgSearchHit[] {
+  return [...versions].sort((a, b) => {
+    const rank = typeRank(a.type) - typeRank(b.type);
+    if (rank) return rank;
+    return (b.rating ?? 0) - (a.rating ?? 0);
+  });
+}
+
+export function groupUgResults(hits: UgSearchHit[]): UgSongGroup[] {
+  const map = new Map<string, UgSongGroup>();
+  for (const hit of hits) {
+    const parsed = parseHitTitle(hit.title);
+    const fromUrl = parseUgTabUrl(hit.url);
+    const songName = hit.songName?.trim() || parsed.songName || fromUrl.songName || 'Untitled';
+    const artistName = hit.artistName?.trim() || parsed.artistName || fromUrl.artistName || '';
+    const id = `${songName}:::${artistName}`.toLowerCase();
+    const existing = map.get(id);
+    const version: UgSearchHit = { ...hit, songName, artistName };
+    if (existing) {
+      if (!existing.versions.some((row) => row.url === hit.url)) existing.versions.push(version);
+    } else {
+      map.set(id, { id, songName, artistName, versions: [version] });
+    }
+  }
+  return [...map.values()].map((group) => ({ ...group, versions: sortUgVersions(group.versions) }));
+}
