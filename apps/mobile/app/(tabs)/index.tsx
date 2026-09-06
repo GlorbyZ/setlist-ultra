@@ -1,8 +1,9 @@
-import { type Href, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Pressable,
   TextInput,
   useWindowDimensions,
@@ -13,22 +14,18 @@ import { Text } from '@/components/Themed';
 import { ActionSheet, BrandDialog } from '@/src/components/BrandDialog';
 import { BrandButton } from '@/src/components/BrandButton';
 import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
+import { SongsDrawer, type SongListId } from '@/src/components/SongsDrawer';
 import { SongViewer } from '@/src/components/SongViewer';
+import { UgImportSheet } from '@/src/components/UgImportSheet';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
 import { addSongToSetlist, deleteSong, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
+import { groupUgResults, mergeUgHits, searchUgTabs, UG_PAGE_SIZE, type UgSearchHit, type UgSongGroup } from '@/src/lib/ug-api';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
 
-type ListId = 'all' | 'recents' | 'favorites' | 'unfiled';
 type SortId = 'title' | 'artist' | 'modified' | 'number';
 type SourceId = 'all' | 'ug' | 'sbp' | 'manual';
-
-const LISTS: { id: ListId; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'recents', label: 'Recents' },
-  { id: 'favorites', label: 'Favorites' },
-  { id: 'unfiled', label: 'Unfiled' },
-];
 
 const SORTS: { id: SortId; label: string }[] = [
   { id: 'title', label: 'Title' },
@@ -37,8 +34,18 @@ const SORTS: { id: SortId; label: string }[] = [
   { id: 'number', label: 'Number' },
 ];
 
+const MIN_LOCAL = 1;
+
+type ListRow =
+  | { kind: 'heading'; id: string; title: string }
+  | { kind: 'status'; id: string; text: string }
+  | { kind: 'local'; song: SongRow }
+  | { kind: 'online'; group: UgSongGroup }
+  | { kind: 'action'; id: string; label: string };
+
 export default function SongsScreen() {
   const { songs, setlists, loading, error, refresh } = useLibrary();
+  const { setDrawerOpen } = useSongsChrome();
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
@@ -46,7 +53,7 @@ export default function SongsScreen() {
   const split = width >= 900;
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [listId, setListId] = useState<ListId>('all');
+  const [listId, setListId] = useState<SongListId>('all');
   const [sortId, setSortId] = useState<SortId>('title');
   const [filterKey, setFilterKey] = useState<string | null>(null);
   const [filterSource, setFilterSource] = useState<SourceId>('all');
@@ -58,6 +65,20 @@ export default function SongsScreen() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState<'key' | 'tag' | 'artist' | 'source' | null>(null);
   const [dialog, setDialog] = useState<{ title: string; body?: string; songId?: string } | null>(null);
+  const [onlineHits, setOnlineHits] = useState<UgSearchHit[]>([]);
+  const [onlineNext, setOnlineNext] = useState<number | null>(null);
+  const [onlineStatus, setOnlineStatus] = useState<'idle' | 'searching' | 'ready' | 'empty' | 'error'>('idle');
+  const [onlineError, setOnlineError] = useState<string | null>(null);
+  const [importGroup, setImportGroup] = useState<UgSongGroup | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [wantOnline, setWantOnline] = useState(false);
+  const searchGen = useRef(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => setDrawerOpen(false);
+    }, [setDrawerOpen]),
+  );
 
   const keys = useMemo(
     () => [...new Set(songs.map((song) => song.originalKey).filter(Boolean) as string[])].sort(),
@@ -69,9 +90,8 @@ export default function SongsScreen() {
     [songs],
   );
 
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    let rows = songs.filter((song) => `${song.title} ${song.artist} ${song.importSource ?? ''}`.toLowerCase().includes(q));
+  const scoped = useMemo(() => {
+    let rows = songs;
     if (listId === 'recents') {
       rows = [...rows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 30);
     } else if (listId === 'favorites') {
@@ -92,9 +112,97 @@ export default function SongsScreen() {
       });
     }
     return rows;
-  }, [songs, query, listId, sortId, filterKey, filterTag, filterArtist, filterSource]);
+  }, [songs, listId, sortId, filterKey, filterTag, filterArtist, filterSource]);
 
-  const selected = filtered.find((s) => s.id === selectedId) ?? filtered[0];
+  const q = query.trim().toLowerCase();
+  const localHits = useMemo(() => {
+    if (!q) return scoped;
+    return scoped.filter((song) => matchesQuery(song, q));
+  }, [scoped, q]);
+
+  const onlineGroups = useMemo(() => groupUgResults(onlineHits), [onlineHits]);
+
+  const runOnline = useCallback(async (raw: string, page: number, append = false) => {
+    const term = raw.trim();
+    if (!term) return;
+    const gen = ++searchGen.current;
+    if (page === 1) {
+      setOnlineStatus('searching');
+      setOnlineError(null);
+      if (!append) setOnlineHits([]);
+    } else {
+      setLoadingMore(true);
+    }
+    try {
+      const result = await searchUgTabs(term, { page, pageSize: UG_PAGE_SIZE });
+      if (gen !== searchGen.current) return;
+      setOnlineHits((prev) => (page === 1 && !append ? result.hits : mergeUgHits(prev, result.hits)));
+      setOnlineNext(result.nextPage);
+      setOnlineStatus(result.groups.length || result.hits.length ? 'ready' : 'empty');
+    } catch (err) {
+      if (gen !== searchGen.current) return;
+      setOnlineStatus('error');
+      setOnlineError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      searchGen.current += 1;
+      setOnlineHits([]);
+      setOnlineNext(null);
+      setOnlineStatus('idle');
+      setOnlineError(null);
+      setWantOnline(false);
+      return;
+    }
+    if (localHits.length >= MIN_LOCAL) {
+      if (!wantOnline) {
+        setOnlineHits([]);
+        setOnlineNext(null);
+        setOnlineStatus('idle');
+      }
+      return;
+    }
+    const handle = setTimeout(() => void runOnline(term, 1), 400);
+    return () => clearTimeout(handle);
+  }, [query, localHits.length, runOnline]);
+
+  const rows: ListRow[] = useMemo(() => {
+    const searching = q.length > 0;
+    if (!searching) {
+      if (!localHits.length) return [];
+      return localHits.map((song) => ({ kind: 'local' as const, song }));
+    }
+    const out: ListRow[] = [];
+    if (localHits.length >= MIN_LOCAL) {
+      out.push({ kind: 'heading', id: 'local-h', title: 'In your library' });
+      for (const song of localHits) out.push({ kind: 'local', song });
+      out.push({ kind: 'action', id: 'search-online', label: 'Search online' });
+      if (onlineStatus === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
+      if (onlineStatus === 'error') out.push({ kind: 'status', id: 'err', text: onlineError || 'Search failed' });
+      if (onlineStatus === 'empty' && wantOnline) out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
+      if (wantOnline && onlineGroups.length) {
+        out.push({ kind: 'heading', id: 'online-h', title: 'Online' });
+        for (const group of onlineGroups) out.push({ kind: 'online', group });
+      }
+    } else {
+      out.push({ kind: 'status', id: 'no-local', text: 'No local matches' });
+      if (onlineStatus === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
+      if (onlineStatus === 'error') out.push({ kind: 'status', id: 'err', text: onlineError || 'Search failed' });
+      if (onlineStatus === 'empty') out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
+      if (onlineGroups.length) {
+        out.push({ kind: 'heading', id: 'online-h', title: 'Online' });
+        for (const group of onlineGroups) out.push({ kind: 'online', group });
+      }
+    }
+    return out;
+  }, [q, localHits, onlineGroups, onlineStatus, onlineError, wantOnline]);
+
+  const selected = localHits.find((s) => s.id === selectedId) ?? localHits[0];
   const selectedIds = Object.keys(picked).filter((id) => picked[id]);
 
   const openSong = (item: SongRow) => {
@@ -103,21 +211,18 @@ export default function SongsScreen() {
     if (!split) router.push(`/song/${item.id}`);
   };
 
+  const submitSearch = () => {
+    Keyboard.dismiss();
+    const term = query.trim();
+    if (!term) return;
+    if (localHits.length < MIN_LOCAL) void runOnline(term, 1);
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.pane, split && styles.listPane]}>
         <View style={styles.toolbar}>
           <LibrarySwitcher />
-          <View style={styles.chipRow}>
-            {LISTS.map((list) => (
-              <Pressable
-                key={list.id}
-                style={[styles.chip, listId === list.id && styles.chipOn]}
-                onPress={() => setListId(list.id)}>
-                <Text style={[styles.chipText, listId === list.id && styles.chipTextOn]}>{list.label}</Text>
-              </Pressable>
-            ))}
-          </View>
           <View style={styles.chipRow}>
             <Pressable style={styles.chip} onPress={() => setFilterOpen('key')}>
               <Text style={styles.chipText}>{filterKey ? `Key ${filterKey}` : 'Key'}</Text>
@@ -141,6 +246,13 @@ export default function SongsScreen() {
             value={query}
             onChangeText={setQuery}
             style={styles.search}
+            returnKeyType="search"
+            blurOnSubmit
+            autoCorrect={false}
+            autoCapitalize="none"
+            enablesReturnKeyAutomatically
+            submitBehavior="blurAndSubmit"
+            onSubmitEditing={submitSearch}
           />
           <View style={styles.chipRow}>
             <View style={{ flex: 1 }}>
@@ -175,34 +287,73 @@ export default function SongsScreen() {
           <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />
         ) : (
           <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.id}
+            data={rows}
+            keyExtractor={(item) =>
+              item.kind === 'local' ? `local-${item.song.id}` : item.kind === 'online' ? `online-${item.group.id}` : item.id
+            }
             contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            onEndReachedThreshold={0.4}
+            onEndReached={() => {
+              const showOnline = q && (localHits.length < MIN_LOCAL || wantOnline);
+              if (!showOnline || !onlineNext || loadingMore || onlineStatus === 'searching') return;
+              void runOnline(query, onlineNext, true);
+            }}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>No songs yet.</Text>
                 <Text style={styles.emptyBody}>Import a chart or .sbp.</Text>
               </View>
             }
+            ListFooterComponent={
+              loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : onlineNext && q && (localHits.length < MIN_LOCAL || wantOnline) ? (
+                <Pressable style={styles.loadMore} onPress={() => void runOnline(query, onlineNext, true)}>
+                  <Text style={styles.loadMoreText}>Load more</Text>
+                </Pressable>
+              ) : null
+            }
             renderItem={({ item }) => {
-              const on = selecting && picked[item.id];
+              if (item.kind === 'heading') return <Text style={styles.section}>{item.title}</Text>;
+              if (item.kind === 'status') return <Text style={styles.status}>{item.text}</Text>;
+              if (item.kind === 'action') {
+                return (
+                  <Pressable style={styles.ghost} onPress={() => { setWantOnline(true); void runOnline(query, 1); }}>
+                    <Text style={styles.ghostText}>{item.label}</Text>
+                  </Pressable>
+                );
+              }
+              if (item.kind === 'online') {
+                const rating = item.group.rating != null ? `${item.group.rating.toFixed(1)}★` : null;
+                return (
+                  <Pressable style={styles.row} onPress={() => setImportGroup(item.group)}>
+                    <Text style={styles.title}>{item.group.songName}</Text>
+                    <Text style={styles.meta}>
+                      {item.group.artistName || 'Unknown artist'}
+                      {` · ${item.group.versions.length} version${item.group.versions.length === 1 ? '' : 's'}`}
+                      {rating ? ` · ${rating}` : ''}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              const song = item.song;
+              const on = selecting && picked[song.id];
               return (
                 <Pressable
-                  style={[styles.row, selected?.id === item.id && split && styles.rowOn, on && styles.rowOn]}
+                  style={[styles.row, selected?.id === song.id && split && styles.rowOn, on && styles.rowOn]}
                   onPress={() => {
                     if (selecting) {
-                      setPicked((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
+                      setPicked((prev) => ({ ...prev, [song.id]: !prev[song.id] }));
                       return;
                     }
-                    openSong(item);
+                    openSong(song);
                   }}
-                  onLongPress={() => setDialog({ title: item.title, songId: item.id })}>
-                  <Text style={styles.title}>{item.title}</Text>
+                  onLongPress={() => setDialog({ title: song.title, songId: song.id })}>
+                  <Text style={styles.title}>{song.title}</Text>
                   <Text style={styles.meta}>
-                    {item.artist}
-                    {item.originalKey ? ` · ${item.originalKey}` : ''}
-                    {item.keyShift ? ` · ${item.keyShift > 0 ? '+' : ''}${item.keyShift}` : ''}
-                    {isFavorite(item) ? ' · Fav' : ''}
+                    {song.artist}
+                    {song.originalKey ? ` · ${song.originalKey}` : ''}
+                    {song.keyShift ? ` · ${song.keyShift > 0 ? '+' : ''}${song.keyShift}` : ''}
+                    {isFavorite(song) ? ' · Fav' : ''}
                   </Text>
                 </Pressable>
               );
@@ -215,16 +366,26 @@ export default function SongsScreen() {
         <View style={styles.preview}>
           <View style={styles.previewBar}>
             <Text style={styles.previewTitle}>{selected.title}</Text>
-            <Pressable style={styles.ghost} onPress={() => router.push(`/song/${selected.id}`)}>
-              <Text style={styles.ghostText}>Live</Text>
+            <Pressable style={styles.ghostChip} onPress={() => router.push(`/song/${selected.id}`)}>
+              <Text style={styles.ghostChipText}>Live</Text>
             </Pressable>
-            <Pressable style={styles.ghost} onPress={() => router.push(`/editor/${selected.id}` as Href)}>
-              <Text style={styles.ghostText}>Edit</Text>
+            <Pressable style={styles.ghostChip} onPress={() => router.push(`/editor/${selected.id}` as Href)}>
+              <Text style={styles.ghostChipText}>Edit</Text>
             </Pressable>
           </View>
           <SongViewer document={parseSongDocument(selected)} transpose={selected.keyShift ?? 0} capo={selected.capo ?? 0} />
         </View>
       ) : null}
+
+      <SongsDrawer listId={listId} onSelectList={setListId} />
+      <UgImportSheet
+        group={importGroup}
+        onClose={() => setImportGroup(null)}
+        onImported={(songId) => {
+          void refresh();
+          router.push(`/song/${songId}`);
+        }}
+      />
 
       <ActionSheet
         visible={sortOpen}
@@ -351,6 +512,11 @@ function SetTargetPicker({
   );
 }
 
+function matchesQuery(song: SongRow, q: string) {
+  const blob = `${song.title} ${song.artist} ${song.tags ?? ''} ${song.notesText ?? ''} ${song.importSource ?? ''} ${song.chordpro?.slice(0, 500) ?? ''}`.toLowerCase();
+  return blob.includes(q);
+}
+
 function tagList(song: SongRow) {
   return (song.tags ?? '')
     .split(/[,;]/)
@@ -390,9 +556,7 @@ function makeStyles(t: AppTheme) {
       paddingHorizontal: 10,
       paddingVertical: 6,
     },
-    chipOn: { borderColor: t.accent, backgroundColor: t.bg },
     chipText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
-    chipTextOn: { color: t.accent },
     search: {
       backgroundColor: t.inputBg,
       color: t.text,
@@ -403,6 +567,8 @@ function makeStyles(t: AppTheme) {
       paddingVertical: 12,
     },
     list: { paddingHorizontal: 16, paddingBottom: 40 },
+    section: { color: t.text, fontWeight: '800' as const, fontSize: 14, marginBottom: 8, marginTop: 4 },
+    status: { color: t.muted, marginBottom: 10 },
     row: {
       backgroundColor: t.panel,
       borderRadius: t.radius.md,
@@ -427,12 +593,16 @@ function makeStyles(t: AppTheme) {
       borderBottomColor: t.border,
     },
     previewTitle: { color: t.text, fontWeight: '800' as const, flex: 1, fontSize: 18 },
-    ghost: {
+    ghost: { paddingVertical: 10, alignItems: 'center' as const, marginBottom: 12 },
+    ghostText: { color: t.accent, fontWeight: '700' as const },
+    ghostChip: {
       backgroundColor: t.panel,
       borderRadius: t.radius.sm,
       paddingHorizontal: 12,
       paddingVertical: 8,
     },
-    ghostText: { color: t.text, fontWeight: '700' as const },
+    ghostChipText: { color: t.text, fontWeight: '700' as const },
+    loadMore: { alignItems: 'center' as const, paddingVertical: 16 },
+    loadMoreText: { color: t.accent, fontWeight: '700' as const },
   };
 }

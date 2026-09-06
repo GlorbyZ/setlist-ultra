@@ -101,6 +101,7 @@ function hitFromNode(node) {
   const artistName = node.artist_name || node.artistName || '';
   const abs = url.startsWith('http') ? url : `https://tabs.ultimate-guitar.com${url.startsWith('/') ? '' : '/'}${url}`;
   const ratingRaw = Number(node.rating);
+  const popularityRaw = Number(node.votes ?? node.hits ?? node.song_hit);
   return {
     title: [songName, artistName].filter(Boolean).join(' — '),
     url: abs,
@@ -108,6 +109,7 @@ function hitFromNode(node) {
     artistName: artistName ? String(artistName) : undefined,
     type: String(node.type || node.marketing_type || node.tab_type || '').trim() || undefined,
     rating: Number.isFinite(ratingRaw) && ratingRaw > 0 ? ratingRaw : undefined,
+    popularity: Number.isFinite(popularityRaw) && popularityRaw > 0 ? popularityRaw : undefined,
     key: node.tonality_name || node.tonalityName || undefined,
     songId: node.song_id != null ? String(node.song_id) : node.songId != null ? String(node.songId) : undefined,
   };
@@ -132,7 +134,7 @@ function collectSearchResults(store) {
       bestScore = score;
     }
   });
-  if (best.length) return best.slice(0, 40);
+  if (best.length) return best.slice(0, 120);
 
   const results = [];
   walk(store, (node) => {
@@ -140,7 +142,42 @@ function collectSearchResults(store) {
     if (!hit || results.some((row) => row.url === hit.url)) return;
     results.push(hit);
   });
-  return results.slice(0, 40);
+  return results.slice(0, 120);
+}
+
+function groupKey(hit) {
+  const song = String(hit.songName || hit.title || '').trim().toLowerCase();
+  const artist = String(hit.artistName || '').trim().toLowerCase();
+  return `${song}:::${artist}`;
+}
+
+function groupHits(hits) {
+  const map = new Map();
+  for (const hit of hits) {
+    const id = groupKey(hit);
+    const existing = map.get(id);
+    if (existing) {
+      if (!existing.versions.some((row) => row.url === hit.url)) existing.versions.push(hit);
+    } else {
+      map.set(id, {
+        id,
+        songName: hit.songName || hit.title,
+        artistName: hit.artistName || '',
+        versions: [hit],
+      });
+    }
+  }
+  const groups = [...map.values()].map((group) => {
+    const rating = Math.max(0, ...group.versions.map((row) => row.rating ?? 0));
+    const popularity = Math.max(0, ...group.versions.map((row) => row.popularity ?? 0));
+    return { ...group, rating: rating || undefined, popularity: popularity || undefined };
+  });
+  groups.sort((a, b) => {
+    if ((b.rating ?? 0) !== (a.rating ?? 0)) return (b.rating ?? 0) - (a.rating ?? 0);
+    if ((b.popularity ?? 0) !== (a.popularity ?? 0)) return (b.popularity ?? 0) - (a.popularity ?? 0);
+    return String(a.songName).localeCompare(String(b.songName)) || String(a.artistName).localeCompare(String(b.artistName));
+  });
+  return groups;
 }
 
 function tabFromStore(store) {
@@ -180,7 +217,7 @@ function hrefResults(html) {
     if (!title || results.some((row) => row.url === url)) continue;
     results.push({ title, url });
   }
-  return results.slice(0, 40);
+  return results.slice(0, 120);
 }
 
 export async function fetchHtml(url) {
@@ -198,8 +235,8 @@ export async function fetchHtml(url) {
   return response.text();
 }
 
-export async function searchTabs(query) {
-  const searchUrl = `https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(query)}`;
+export async function searchTabs(query, page = 1) {
+  const searchUrl = `https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(query)}&page=${page}`;
   const html = await fetchHtml(searchUrl);
   const store = extractJsStore(html);
   const fromStore = store ? collectSearchResults(store) : [];
@@ -255,8 +292,19 @@ export async function handleUgRequest(request) {
     if (url.pathname === '/search') {
       const q = url.searchParams.get('q') ?? '';
       if (!q.trim()) return jsonResponse({ error: 'q is required' }, 400);
-      const results = await searchTabs(q.trim());
-      return jsonResponse({ results });
+      const page = Math.max(1, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
+      const pageSize = Math.min(40, Math.max(5, Number.parseInt(url.searchParams.get('pageSize') ?? '20', 10) || 20));
+      const hits = await searchTabs(q.trim(), page);
+      const groups = groupHits(hits);
+      const nextPage = hits.length >= 8 ? page + 1 : null;
+      return jsonResponse({
+        results: hits,
+        songs: groups,
+        page,
+        pageSize,
+        nextPage,
+        sort: 'rating,popularity',
+      });
     }
 
     if (url.pathname === '/tab') {

@@ -4,7 +4,10 @@ export type UgSearchHit = {
   songName?: string;
   artistName?: string;
   type?: string;
+  /** UG js-store `rating` — star average when present (typically 0–5). */
   rating?: number;
+  /** UG js-store `votes` or `hits` — popularity / vote count when present. */
+  popularity?: number;
   key?: string;
   songId?: string;
 };
@@ -14,6 +17,8 @@ export type UgSongGroup = {
   songName: string;
   artistName: string;
   versions: UgSearchHit[];
+  rating?: number;
+  popularity?: number;
 };
 
 function titleCaseWords(value: string) {
@@ -64,7 +69,26 @@ export function sortUgVersions(versions: UgSearchHit[]): UgSearchHit[] {
   return [...versions].sort((a, b) => {
     const rank = typeRank(a.type) - typeRank(b.type);
     if (rank) return rank;
-    return (b.rating ?? 0) - (a.rating ?? 0);
+    const rating = (b.rating ?? 0) - (a.rating ?? 0);
+    if (rating) return rating;
+    return (b.popularity ?? 0) - (a.popularity ?? 0);
+  });
+}
+
+function groupScore(group: UgSongGroup) {
+  const rating = Math.max(0, ...group.versions.map((row) => row.rating ?? 0));
+  const popularity = Math.max(0, ...group.versions.map((row) => row.popularity ?? 0));
+  return { rating, popularity };
+}
+
+/** Best rating, then popularity, then title / artist. Never uses songId. */
+export function rankUgGroups(groups: UgSongGroup[]): UgSongGroup[] {
+  return [...groups].sort((a, b) => {
+    const sa = groupScore(a);
+    const sb = groupScore(b);
+    if (sb.rating !== sa.rating) return sb.rating - sa.rating;
+    if (sb.popularity !== sa.popularity) return sb.popularity - sa.popularity;
+    return a.songName.localeCompare(b.songName) || a.artistName.localeCompare(b.artistName);
   });
 }
 
@@ -84,5 +108,24 @@ export function groupUgResults(hits: UgSearchHit[]): UgSongGroup[] {
       map.set(id, { id, songName, artistName, versions: [version] });
     }
   }
-  return [...map.values()].map((group) => ({ ...group, versions: sortUgVersions(group.versions) }));
+  return rankUgGroups(
+    [...map.values()].map((group) => {
+      const versions = sortUgVersions(group.versions);
+      const { rating, popularity } = groupScore({ ...group, versions });
+      return {
+        ...group,
+        versions,
+        rating: rating || undefined,
+        popularity: popularity || undefined,
+      };
+    }),
+  );
+}
+
+export function mergeUgHits(existing: UgSearchHit[], incoming: UgSearchHit[]): UgSearchHit[] {
+  const out = [...existing];
+  for (const hit of incoming) {
+    if (!out.some((row) => row.url === hit.url)) out.push(hit);
+  }
+  return out;
 }

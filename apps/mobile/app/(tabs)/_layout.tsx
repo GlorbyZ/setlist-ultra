@@ -5,7 +5,7 @@ import { type ComponentProps } from 'react';
 import { type ColorValue, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BrandMark } from '@/src/components/BrandMark';
+import { SongsChromeProvider, SongsHeaderLeft, TabsHeaderLeft } from '@/src/providers/SongsChromeProvider';
 import { BRAND_GRADIENT, useTheme } from '@/src/theme';
 
 function TabIcon({
@@ -42,12 +42,13 @@ export default function TabLayout() {
   const tabPad = Math.max(insets.bottom, 8);
 
   return (
+    <SongsChromeProvider>
     <Tabs
       screenOptions={{
-        headerLeft: () => <BrandMark height={56} />,
+        headerLeft: () => <TabsHeaderLeft />,
         headerTitle: () => null,
         headerTitleAlign: 'left',
-        headerLeftContainerStyle: { paddingLeft: 4, justifyContent: 'center' },
+        headerLeftContainerStyle: { paddingLeft: 0, justifyContent: 'center' },
         headerStyle: { backgroundColor: theme.bg, height: 64 + insets.top },
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
@@ -67,6 +68,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Songs',
+          headerLeft: () => <SongsHeaderLeft />,
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon name="musical-notes" color={color} size={size} focused={focused} />
           ),
@@ -100,5 +102,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </SongsChromeProvider>
   );
 }

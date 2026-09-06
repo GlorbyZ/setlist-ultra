@@ -23,7 +23,6 @@ import {
   saveSongFromUg,
 } from '@/src/lib/repository';
 import {
-  groupUgResults,
   importUgTab,
   searchUgTabs,
   type UgSearchHit,
@@ -75,9 +74,9 @@ export default function ImportScreen() {
     setPreviewHit(null);
     setPreviewTab(null);
     try {
-      const rows = await searchUgTabs(q);
-      setGroups(groupUgResults(rows));
-      if (!rows.length) setDialog({ title: 'No results', body: 'Try another search or paste a UG tab URL below.' });
+      const page = await searchUgTabs(q);
+      setGroups(page.groups);
+      if (!page.groups.length) setDialog({ title: 'No results', body: 'Try another search or paste a UG tab URL below.' });
     } catch (error) {
       setDialog({
         title: 'Search failed',
