@@ -1,0 +1,18 @@
+---
+description: Always ship a GitHub release APK and email the download link
+alwaysApply: true
+---
+
+# Ship + build (standing)
+
+When work is ready to land (feature, fix, or the user says ship/build/email), **do not stop at a PR**. Complete the release path:
+
+1. Merge to `main` (or commit on `main` if already there).
+2. Bump `apps/mobile/app.json` + `apps/mobile/package.json` version; update the README `git tag v*` example.
+3. `npm run preflight` and `npm run typecheck` on `main`.
+4. Commit the bump, push `main`.
+5. Tag `vX.Y.Z` and `git push origin vX.Y.Z` (primary APK path — never debug APKs, never commit `releases/*.apk`).
+6. Wait for `.github/workflows/android-release.yml` to publish `setlist-ultra-android.apk`.
+7. Email **epicnigs3@gmail.com** with the GitHub Releases APK URL.
+
+Redeploy `services/ug-proxy` to `ug.bigzay.com` when the proxy changed. Do not put secrets, `.env`, or `.cursor/mcp.json` in the commit.
