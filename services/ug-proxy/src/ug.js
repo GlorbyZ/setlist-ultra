@@ -4,12 +4,22 @@ const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 function decodeEntities(value) {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
+  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return String(value ?? '').replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (full, body) => {
+    if (/^#x/i.test(body)) {
+      const code = Number.parseInt(body.slice(2), 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : full;
+    }
+    if (body.startsWith('#')) {
+      const code = Number.parseInt(body.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : full;
+    }
+    return named[body.toLowerCase()] ?? full;
+  });
+}
+
+function decodeText(value) {
+  return decodeEntities(decodeEntities(String(value ?? '')));
 }
 
 function extractJsStore(html) {
@@ -73,7 +83,7 @@ function wikiToLines(content) {
       if (chords.length && !leftover) {
         lines.push({ type: 'chords', chords });
       } else {
-        lines.push({ type: 'lyric', lyric: visible });
+        lines.push({ type: 'lyric', lyric: decodeText(visible) });
       }
       continue;
     }
@@ -86,7 +96,7 @@ function wikiToLines(content) {
         continue;
       }
     }
-    lines.push({ type: 'lyric', lyric: line });
+    lines.push({ type: 'lyric', lyric: decodeText(line) });
   }
 
   return lines;
@@ -96,9 +106,9 @@ function hitFromNode(node) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) return null;
   const url = node.tab_url || node.tabUrl || node.url;
   if (typeof url !== 'string' || !url.includes('/tab/')) return null;
-  const songName = node.song_name || node.songName || '';
+  const songName = decodeText(node.song_name || node.songName || '');
   if (!songName) return null;
-  const artistName = node.artist_name || node.artistName || '';
+  const artistName = decodeText(node.artist_name || node.artistName || '');
   const abs = url.startsWith('http') ? url : `https://tabs.ultimate-guitar.com${url.startsWith('/') ? '' : '/'}${url}`;
   const ratingRaw = Number(node.rating);
   const popularityRaw = Number(node.votes ?? node.hits ?? node.song_hit);
@@ -124,7 +134,8 @@ function collectSearchResults(store) {
     const songs = new Set();
     for (const item of node) {
       const hit = hitFromNode(item);
-      if (!hit || hits.some((row) => row.url === hit.url)) continue;
+      if (!hit || String(hit.type ?? '').toLowerCase().includes('official')) continue;
+      if (hits.some((row) => row.url === hit.url)) continue;
       hits.push(hit);
       songs.add(`${hit.songName}:::${hit.artistName ?? ''}`.toLowerCase());
     }
@@ -139,7 +150,8 @@ function collectSearchResults(store) {
   const results = [];
   walk(store, (node) => {
     const hit = hitFromNode(node);
-    if (!hit || results.some((row) => row.url === hit.url)) return;
+    if (!hit || String(hit.type ?? '').toLowerCase().includes('official')) return;
+    if (results.some((row) => row.url === hit.url)) return;
     results.push(hit);
   });
   return results.slice(0, 120);
@@ -180,29 +192,76 @@ function groupHits(hits) {
   return groups;
 }
 
-function tabFromStore(store) {
-  let tabMeta = {};
+function canonicalTabUrl(url) {
+  try {
+    const abs = url.startsWith('http') ? url : `https://tabs.ultimate-guitar.com${url.startsWith('/') ? '' : '/'}${url}`;
+    const parsed = new URL(abs);
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`.toLowerCase();
+  } catch {
+    return String(url).split('?')[0].replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+function tabIdFromUrl(url) {
+  const match = String(url).match(/-(\d+)(?:\/)?(?:[?#]|$)/);
+  return match ? match[1] : null;
+}
+
+function nodeTabUrl(node) {
+  const url = node.tab_url || node.tabUrl || node.url;
+  if (typeof url !== 'string' || !url.includes('/tab/')) return '';
+  return url.startsWith('http') ? url : `https://tabs.ultimate-guitar.com${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+function nodeHasWiki(node) {
+  return typeof node.content === 'string' && node.content.includes('[ch]');
+}
+
+/** Bind metadata + wiki to the requested tab URL — never the last related song on the page. */
+export function tabFromStore(store, requestedUrl) {
+  const want = canonicalTabUrl(requestedUrl);
+  const wantId = tabIdFromUrl(requestedUrl);
+  let matched = null;
   let wiki = '';
+
   walk(store, (node) => {
     if (!node || typeof node !== 'object' || Array.isArray(node)) return;
-    if (node.song_name && node.artist_name && (node.tab_url || node.id)) {
-      tabMeta = node;
-    }
-    if (typeof node.content === 'string' && node.content.includes('[ch]')) {
-      wiki = node.content;
-    }
+    const abs = nodeTabUrl(node);
+    const sameUrl = abs && canonicalTabUrl(abs) === want;
+    const sameId =
+      wantId &&
+      (String(node.id ?? '') === wantId ||
+        String(node.tab_id ?? '') === wantId ||
+        (abs && tabIdFromUrl(abs) === wantId));
+    if (!sameUrl && !sameId) return;
+    matched = node;
+    if (nodeHasWiki(node)) wiki = node.content;
   });
-  if (!wiki && !tabMeta.song_name) return null;
+
+  if (matched && !wiki) {
+    const id = matched.id ?? matched.tab_id;
+    walk(store, (node) => {
+      if (!node || typeof node !== 'object' || Array.isArray(node)) return;
+      if (!nodeHasWiki(node)) return;
+      if (id != null && (node.id === id || node.tab_id === id)) wiki = node.content;
+    });
+  }
+
+  if (!matched || !wiki) return null;
+  const abs = nodeTabUrl(matched) || requestedUrl;
   return {
+    requestedUrl,
     tab: {
-      title: tabMeta.song_name || 'Imported chart',
-      artist_name: tabMeta.artist_name || '',
-      author: tabMeta.username,
-      key: tabMeta.tonality_name,
-      capo: tabMeta.capo ? String(tabMeta.capo) : undefined,
-      tuning: Array.isArray(tabMeta.tuning) ? tabMeta.tuning.join(' ') : tabMeta.tuning,
-      difficulty: tabMeta.difficulty,
+      title: decodeText(matched.song_name || 'Imported chart'),
+      artist_name: decodeText(matched.artist_name || ''),
+      author: matched.username,
+      key: matched.tonality_name,
+      capo: matched.capo ? String(matched.capo) : undefined,
+      tuning: Array.isArray(matched.tuning) ? matched.tuning.join(' ') : matched.tuning,
+      difficulty: matched.difficulty,
       lines: wikiToLines(wiki),
+      id: String(matched.id ?? wantId ?? ''),
+      tab_url: abs,
     },
   };
 }
@@ -250,14 +309,14 @@ export async function fetchTab(tabUrl) {
   }
   const html = await fetchHtml(tabUrl);
   const store = extractJsStore(html);
-  const parsedTab = store ? tabFromStore(store) : null;
+  const parsedTab = store ? tabFromStore(store, tabUrl) : null;
   if (!parsedTab) {
     throw new Error('Could not read chart from Ultimate Guitar');
   }
   return parsedTab;
 }
 
-export function jsonResponse(body, status = 200) {
+export function jsonResponse(body, status = 200, cache = true) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -265,7 +324,7 @@ export function jsonResponse(body, status = 200) {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
-      'Cache-Control': status === 200 ? 'public, max-age=120' : 'no-store',
+      'Cache-Control': status === 200 && cache ? 'public, max-age=120' : 'no-store',
     },
   });
 }
@@ -311,7 +370,7 @@ export async function handleUgRequest(request) {
       const tabUrl = url.searchParams.get('url');
       if (!tabUrl) return jsonResponse({ error: 'url is required' }, 400);
       const tab = await fetchTab(tabUrl);
-      return jsonResponse(tab);
+      return jsonResponse(tab, 200, false);
     }
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'unknown error' }, 500);

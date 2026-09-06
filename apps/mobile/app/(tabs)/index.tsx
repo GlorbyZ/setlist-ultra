@@ -13,7 +13,6 @@ import {
 import { Text } from '@/components/Themed';
 import { ActionSheet, BrandDialog } from '@/src/components/BrandDialog';
 import { BrandButton } from '@/src/components/BrandButton';
-import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { SongsDrawer, type SongListId } from '@/src/components/SongsDrawer';
 import { SongViewer } from '@/src/components/SongViewer';
 import { UgImportSheet } from '@/src/components/UgImportSheet';
@@ -222,24 +221,6 @@ export default function SongsScreen() {
     <View style={styles.container}>
       <View style={[styles.pane, split && styles.listPane]}>
         <View style={styles.toolbar}>
-          <LibrarySwitcher />
-          <View style={styles.chipRow}>
-            <Pressable style={styles.chip} onPress={() => setFilterOpen('key')}>
-              <Text style={styles.chipText}>{filterKey ? `Key ${filterKey}` : 'Key'}</Text>
-            </Pressable>
-            <Pressable style={styles.chip} onPress={() => setFilterOpen('tag')}>
-              <Text style={styles.chipText}>{filterTag ?? 'Tag'}</Text>
-            </Pressable>
-            <Pressable style={styles.chip} onPress={() => setFilterOpen('artist')}>
-              <Text style={styles.chipText}>{filterArtist ?? 'Artist'}</Text>
-            </Pressable>
-            <Pressable style={styles.chip} onPress={() => setFilterOpen('source')}>
-              <Text style={styles.chipText}>{filterSource === 'all' ? 'Source' : filterSource.toUpperCase()}</Text>
-            </Pressable>
-            <Pressable style={styles.chip} onPress={() => setSortOpen(true)}>
-              <Text style={styles.chipText}>Sort</Text>
-            </Pressable>
-          </View>
           <TextInput
             placeholder="Search songs"
             placeholderTextColor={theme.faint}
@@ -377,7 +358,18 @@ export default function SongsScreen() {
         </View>
       ) : null}
 
-      <SongsDrawer listId={listId} onSelectList={setListId} />
+      <SongsDrawer
+        listId={listId}
+        onSelectList={setListId}
+        filterKey={filterKey}
+        filterTag={filterTag}
+        filterArtist={filterArtist}
+        filterSourceLabel={filterSource === 'all' ? 'Source' : filterSource.toUpperCase()}
+        onOpenFilter={(which) => {
+          if (which === 'sort') setSortOpen(true);
+          else setFilterOpen(which);
+        }}
+      />
       <UgImportSheet
         group={importGroup}
         onClose={() => setImportGroup(null)}

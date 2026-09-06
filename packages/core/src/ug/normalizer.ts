@@ -1,4 +1,5 @@
-import type { ChordSlot, Line, Section, SongDocument, UgLine, UgTabResponse } from '../ast/types';
+import type { ChordSlot, Line, SongDocument, UgLine, UgTabResponse } from '../ast/types';
+import { decodeHtmlEntities } from '../html/entities';
 
 function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -25,7 +26,7 @@ function pairUgLines(lines: UgLine[]): Line[] {
     }
 
     if (current.type === 'lyric') {
-      result.push({ id: uid(), kind: 'lyric_only', lyric: current.lyric });
+      result.push({ id: uid(), kind: 'lyric_only', lyric: decodeHtmlEntities(current.lyric) });
       i += 1;
       continue;
     }
@@ -35,7 +36,7 @@ function pairUgLines(lines: UgLine[]): Line[] {
       result.push({
         id: uid(),
         kind: 'paired',
-        lyric: next.lyric,
+        lyric: decodeHtmlEntities(next.lyric),
         slots: chordsToSlots(current.chords),
       });
       i += 2;
@@ -87,8 +88,8 @@ export function normalizeUgTab(response: UgTabResponse, sourceUrl?: string): {
   return {
     document,
     meta: {
-      title: tab.title || 'Untitled',
-      artist: tab.artist_name || 'Unknown Artist',
+      title: decodeHtmlEntities(tab.title || 'Untitled'),
+      artist: decodeHtmlEntities(tab.artist_name || 'Unknown Artist'),
       originalKey: tab.key,
       capo: Number.isFinite(capo) ? capo : undefined,
       sourceUrl,

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { Text } from '@/components/Themed';
-import { fingerprintContent, normalizeUgTab, parseChordPro, type UgTabResponse } from '@setlist-ultra/core';
+import { assertUgTabMatchesRequest, fingerprintContent, normalizeUgTab, parseChordPro, type UgTabResponse } from '@setlist-ultra/core';
 import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
 import { SongViewer } from '@/src/components/SongViewer';
@@ -89,16 +89,26 @@ export default function ImportScreen() {
 
   const openVersion = async (hit: UgSearchHit) => {
     setLoadingPreview(true);
-    setPreviewHit(hit);
+    setPreviewHit(null);
+    setPreviewTab(null);
     setPreviewShift(0);
     try {
       const tabData = await importUgTab(hit.url);
+      assertUgTabMatchesRequest(tabData, hit.url, {
+        songName: hit.songName || selectedGroup?.songName,
+        artistName: hit.artistName || selectedGroup?.artistName,
+      });
+      setPreviewHit(hit);
       setPreviewTab(tabData);
       const capo = Number.parseInt(tabData.tab.capo ?? '0', 10);
       setPreviewCapo(Number.isFinite(capo) ? capo : 0);
     } catch (error) {
       setPreviewHit(null);
-      setDialog({ title: 'Preview failed', body: error instanceof Error ? error.message : 'Unknown error' });
+      setPreviewTab(null);
+      setDialog({
+        title: 'Preview failed',
+        body: error instanceof Error ? error.message : 'Could not open this version.',
+      });
     } finally {
       setLoadingPreview(false);
     }
