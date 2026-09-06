@@ -62,7 +62,13 @@ export type UgTabResponse = {
     tuning?: string;
     difficulty?: string;
     lines: UgLine[];
+    /** Numeric UG tab id when the proxy could read it. */
+    id?: string;
+    /** Canonical tab URL the payload was parsed from. */
+    tab_url?: string;
   };
+  /** Echo of the requested `/tab?url=` so the client can assert a match. */
+  requestedUrl?: string;
 };
 
 export type SongMeta = {

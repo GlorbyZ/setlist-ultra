@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from '@setlist-ultra/core';
+
 export type UgSearchHit = {
   title: string;
   url: string;
@@ -58,11 +60,15 @@ function parseHitTitle(title: string) {
 
 function typeRank(type?: string) {
   const value = (type ?? '').toLowerCase();
-  if (value.includes('official')) return 0;
+  if (value.includes('official')) return 9;
   if (value.includes('chord')) return 1;
   if (value === 'tab' || value.includes('tabs')) return 2;
   if (value.includes('pro') || value.includes('video')) return 5;
   return 3;
+}
+
+export function isOfficialUgType(type?: string) {
+  return (type ?? '').toLowerCase().includes('official');
 }
 
 export function sortUgVersions(versions: UgSearchHit[]): UgSearchHit[] {
@@ -95,13 +101,23 @@ export function rankUgGroups(groups: UgSongGroup[]): UgSongGroup[] {
 export function groupUgResults(hits: UgSearchHit[]): UgSongGroup[] {
   const map = new Map<string, UgSongGroup>();
   for (const hit of hits) {
-    const parsed = parseHitTitle(hit.title);
+    if (isOfficialUgType(hit.type)) continue;
+    const parsed = parseHitTitle(decodeHtmlEntities(hit.title));
     const fromUrl = parseUgTabUrl(hit.url);
-    const songName = hit.songName?.trim() || parsed.songName || fromUrl.songName || 'Untitled';
-    const artistName = hit.artistName?.trim() || parsed.artistName || fromUrl.artistName || '';
+    const songName = decodeHtmlEntities(
+      hit.songName?.trim() || parsed.songName || fromUrl.songName || 'Untitled',
+    );
+    const artistName = decodeHtmlEntities(
+      hit.artistName?.trim() || parsed.artistName || fromUrl.artistName || '',
+    );
     const id = `${songName}:::${artistName}`.toLowerCase();
     const existing = map.get(id);
-    const version: UgSearchHit = { ...hit, songName, artistName };
+    const version: UgSearchHit = {
+      ...hit,
+      title: decodeHtmlEntities(hit.title),
+      songName,
+      artistName,
+    };
     if (existing) {
       if (!existing.versions.some((row) => row.url === hit.url)) existing.versions.push(version);
     } else {

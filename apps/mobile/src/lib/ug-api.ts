@@ -3,7 +3,7 @@ import { config } from './config';
 import { groupUgResults, type UgSearchHit, type UgSongGroup } from './ug-group';
 
 export type { UgSearchHit, UgSongGroup } from './ug-group';
-export { groupUgResults, mergeUgHits, parseUgTabUrl, rankUgGroups, sortUgVersions } from './ug-group';
+export { groupUgResults, mergeUgHits, parseUgTabUrl, rankUgGroups, sortUgVersions, isOfficialUgType } from './ug-group';
 
 export type UgSearchResult = UgSearchHit;
 
@@ -58,11 +58,31 @@ export async function searchUgTabs(
 export async function importUgTab(url: string): Promise<UgTabResponse> {
   const base = config.ugProxyUrl.replace(/\/$/, '');
   const response = await fetch(`${base}/tab?url=${encodeURIComponent(url)}`);
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Import failed (${response.status})`);
+  const body = await response.text();
+  let data: UgTabResponse & { error?: string };
+  try {
+    data = JSON.parse(body) as UgTabResponse & { error?: string };
+  } catch {
+    throw new Error(humanUgError(body, response.status));
   }
+  if (!response.ok || data.error) {
+    throw new Error(humanUgError(body, response.status));
+  }
+  return data;
+}
 
-  return (await response.json()) as UgTabResponse;
+function humanUgError(body: string, status?: number) {
+  try {
+    const parsed = JSON.parse(body) as { error?: string };
+    if (typeof parsed.error === 'string') {
+      if (/could not read chart/i.test(parsed.error)) {
+        return 'This version cannot be opened. Try another arrangement.';
+      }
+      return parsed.error;
+    }
+  } catch {
+    /* use fallback */
+  }
+  if (body.trim().startsWith('{')) return 'Could not open this version.';
+  return body || `Import failed (${status ?? '?'})`;
 }

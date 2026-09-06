@@ -1,5 +1,7 @@
 export * from './ast/types';
+export * from './html/entities';
 export * from './ug/normalizer';
+export * from './ug/match';
 export * from './chord/transpose';
 export * from './hash/md5';
 export * from './key';

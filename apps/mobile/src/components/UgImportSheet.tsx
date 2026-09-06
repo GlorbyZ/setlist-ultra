@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
-import { fingerprintContent, normalizeUgTab, type UgTabResponse } from '@setlist-ultra/core';
+import { assertUgTabMatchesRequest, fingerprintContent, normalizeUgTab, type UgTabResponse } from '@setlist-ultra/core';
 import { BrandButton } from '@/src/components/BrandButton';
 import { SongViewer } from '@/src/components/SongViewer';
 import { insertLibrarySong, saveSongFromUg } from '@/src/lib/repository';
@@ -28,6 +28,17 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previewGen = useRef(0);
+
+  useEffect(() => {
+    previewGen.current += 1;
+    setPreviewHit(null);
+    setPreviewTab(null);
+    setPreviewShift(0);
+    setPreviewCapo(0);
+    setError(null);
+    setLoadingPreview(false);
+  }, [group?.id]);
 
   const previewDoc = useMemo(
     () => (previewTab && previewHit ? normalizeUgTab(previewTab, previewHit.url) : null),
@@ -35,6 +46,7 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
   );
 
   const close = () => {
+    previewGen.current += 1;
     setPreviewHit(null);
     setPreviewTab(null);
     setError(null);
@@ -42,20 +54,30 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
   };
 
   const openVersion = async (hit: UgSearchHit) => {
-    setLoadingPreview(true);
-    setPreviewHit(hit);
+    const gen = ++previewGen.current;
+    setPreviewHit(null);
+    setPreviewTab(null);
     setPreviewShift(0);
     setError(null);
+    setLoadingPreview(true);
     try {
       const tabData = await importUgTab(hit.url);
+      assertUgTabMatchesRequest(tabData, hit.url, {
+        songName: hit.songName || group?.songName,
+        artistName: hit.artistName || group?.artistName,
+      });
+      if (gen !== previewGen.current) return;
+      setPreviewHit(hit);
       setPreviewTab(tabData);
       const capo = Number.parseInt(tabData.tab.capo ?? '0', 10);
       setPreviewCapo(Number.isFinite(capo) ? capo : 0);
     } catch (err) {
+      if (gen !== previewGen.current) return;
       setPreviewHit(null);
-      setError(err instanceof Error ? err.message : 'Preview failed');
+      setPreviewTab(null);
+      setError(err instanceof Error ? err.message : 'Could not open this version.');
     } finally {
-      setLoadingPreview(false);
+      if (gen === previewGen.current) setLoadingPreview(false);
     }
   };
 
@@ -80,6 +102,12 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
         return;
       }
       const tabData = previewTab && previewHit?.url === url ? previewTab : await importUgTab(url);
+      if (previewHit) {
+        assertUgTabMatchesRequest(tabData, url, {
+          songName: previewHit.songName || group?.songName,
+          artistName: previewHit.artistName || group?.artistName,
+        });
+      }
       const songId = await saveSongFromUg(tabData, url, { transpose: previewShift, capo: previewCapo });
       close();
       onImported(songId);
@@ -90,17 +118,26 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
     }
   };
 
+  const headerTitle = previewDoc?.meta.title ?? '';
+  const headerArtist = previewDoc?.meta.artist ?? '';
+
   return (
     <Modal visible={Boolean(group)} animationType="slide" onRequestClose={close}>
       <View style={[styles.shell, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {!group ? null : previewHit && previewDoc ? (
           <>
-            <Pressable onPress={() => { setPreviewHit(null); setPreviewTab(null); }}>
+            <Pressable
+              onPress={() => {
+                previewGen.current += 1;
+                setPreviewHit(null);
+                setPreviewTab(null);
+                setError(null);
+              }}>
               <Text style={styles.link}>← Versions</Text>
             </Pressable>
-            <Text style={styles.title}>{previewDoc.meta.title}</Text>
+            <Text style={styles.title}>{headerTitle}</Text>
             <Text style={styles.meta}>
-              {previewDoc.meta.artist}
+              {headerArtist}
               {previewHit.type ? ` · ${previewHit.type}` : ''}
             </Text>
             <View style={styles.tools}>
@@ -121,6 +158,7 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
               <SongViewer document={previewDoc.document} transpose={previewShift} capo={previewCapo} fontSize={16} />
             </View>
             <BrandButton label="Import" busy={busy} onPress={() => void importUrl(previewHit.url)} />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
           </>
         ) : (
           <>
@@ -149,7 +187,6 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
             />
           </>
         )}
-        {previewHit && error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
     </Modal>
   );

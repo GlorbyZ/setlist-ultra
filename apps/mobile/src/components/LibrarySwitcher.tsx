@@ -7,7 +7,7 @@ import { isHostedConfigured } from '@/src/lib/config';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { BRAND_GRADIENT, useThemedStyles, type AppTheme } from '@/src/theme';
 
-export function LibrarySwitcher() {
+export function LibrarySwitcher({ onChanged }: { onChanged?: () => void }) {
   const { scope, orgs, setScope } = useLibrary();
   const styles = useThemedStyles(makeStyles);
   const orgName = orgs.find((o) => o.id === scope.orgId)?.name;
@@ -18,7 +18,10 @@ export function LibrarySwitcher() {
       <Chip
         label="Personal"
         on={scope.libraryKind === 'personal'}
-        onPress={() => void setScope({ libraryKind: 'personal' })}
+        onPress={() => {
+          void setScope({ libraryKind: 'personal' });
+          onChanged?.();
+        }}
         styles={styles}
       />
       {orgs.map((org) => (
@@ -26,12 +29,15 @@ export function LibrarySwitcher() {
           key={org.id}
           label={org.name}
           on={scope.libraryKind === 'org' && scope.orgId === org.id}
-          onPress={() => void setScope({ libraryKind: 'org', orgId: org.id })}
+          onPress={() => {
+            void setScope({ libraryKind: 'org', orgId: org.id });
+            onChanged?.();
+          }}
           styles={styles}
         />
       ))}
       <Link href={'/groups' as Href} asChild>
-        <Pressable style={styles.chip}>
+        <Pressable style={styles.chip} onPress={() => onChanged?.()}>
           <Text style={styles.chipText}>{hosted ? (orgName ? 'Groups' : '+ Group') : 'Groups'}</Text>
         </Pressable>
       </Link>
@@ -68,7 +74,7 @@ function Chip({
 
 function makeStyles(t: AppTheme) {
   return {
-    row: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 12 },
+    row: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 0 },
     chip: {
       backgroundColor: t.panel,
       borderRadius: t.radius.sm,

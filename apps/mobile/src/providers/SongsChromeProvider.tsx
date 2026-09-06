@@ -48,9 +48,11 @@ export function SongsHeaderLeft() {
       <Pressable
         onPress={toggleDrawer}
         hitSlop={10}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
         accessibilityRole="button"
         accessibilityLabel={drawerOpen ? 'Close menu' : 'Open menu'}>
         <Ionicons name={drawerOpen ? 'close' : 'menu'} size={26} color={theme.text} />
+        {!drawerOpen ? <Ionicons name="chevron-down" size={16} color={theme.text} /> : null}
       </Pressable>
       <BrandMark height={48} />
     </View>
