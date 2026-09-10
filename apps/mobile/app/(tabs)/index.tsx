@@ -575,12 +575,14 @@ function makeStyles(t: AppTheme) {
     iconBtn: {
       width: 48,
       height: 48,
+      padding: 0,
       borderRadius: t.radius.md,
       borderWidth: 1,
       borderColor: t.border,
       backgroundColor: t.panel,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
+      overflow: 'hidden' as const,
     },
     iconBtnOn: { borderColor: t.accent },
     chip: {

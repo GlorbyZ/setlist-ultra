@@ -53,6 +53,9 @@ type PressScaleProps = PressableProps & {
   scaleTo?: number;
 };
 
+/** Animate the pressable itself so style flexDirection / alignItems apply to children. */
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /**
  * Immediate press-in feedback (scale). Action still runs on press/pressOut.
  * unstable_pressDelay forced to 0 so Android does not wait ~130ms before feedback.
@@ -77,9 +80,9 @@ export function PressableScale({
   }));
 
   return (
-    <Pressable
+    <AnimatedPressable
       disabled={disabled}
-      style={style}
+      style={[style, animatedStyle]}
       onPressIn={(e) => {
         if (!disabled) {
           if (reduce) {
@@ -100,8 +103,8 @@ export function PressableScale({
       }}
       {...rest}
       unstable_pressDelay={unstable_pressDelay ?? 0}>
-      <Animated.View style={[animatedStyle, { width: '100%' }]}>{children}</Animated.View>
-    </Pressable>
+      {children}
+    </AnimatedPressable>
   );
 }
 
