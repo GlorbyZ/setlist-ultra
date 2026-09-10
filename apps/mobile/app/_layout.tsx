@@ -78,7 +78,7 @@ function RootLayoutNav() {
         <Stack.Screen name="song/[id]" options={{ title: '', headerShadowVisible: false }} />
         <Stack.Screen name="editor/[id]" options={{ title: 'Editor' }} />
         <Stack.Screen name="setlist/[id]" options={{ title: 'Set' }} />
-        <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Import' }} />
+        <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Add songs' }} />
         <Stack.Screen name="groups" options={{ title: 'Groups' }} />
       </Stack>
     </ThemeProvider>

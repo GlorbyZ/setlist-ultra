@@ -38,7 +38,7 @@ export default function ImportScreen() {
   const { refresh } = useLibrary();
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const [tab, setTab] = useState<'online' | 'paste' | 'file'>('file');
+  const [tab, setTab] = useState<'online' | 'paste' | 'file'>('online');
   const [query, setQuery] = useState('');
   const [groups, setGroups] = useState<UgSongGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<UgSongGroup | null>(null);
@@ -214,7 +214,7 @@ export default function ImportScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.tabs}>
-        {(['file', 'online', 'paste'] as const).map((id) => (
+        {(['online', 'file', 'paste'] as const).map((id) => (
           <Pressable key={id} style={[styles.tab, tab === id && styles.tabOn]} onPress={() => setTab(id)}>
             <Text style={styles.tabText}>{id === 'file' ? 'File / SBP' : id === 'online' ? 'Search online' : 'Paste'}</Text>
           </Pressable>
@@ -297,7 +297,7 @@ export default function ImportScreen() {
                   <SongViewer document={previewDoc.document} transpose={previewShift} capo={previewCapo} fontSize={16} />
                 </View>
                 <BrandButton
-                  label="Import"
+                  label="Add song"
                   busy={busy}
                   onPress={() => void importUrl(previewHit.url, previewShift, previewCapo)}
                 />

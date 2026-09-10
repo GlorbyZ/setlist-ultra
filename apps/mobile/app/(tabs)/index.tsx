@@ -237,7 +237,7 @@ export default function SongsScreen() {
           />
           <View style={styles.chipRow}>
             <View style={{ flex: 1 }}>
-              <BrandButton label="Import" onPress={() => router.push('/import')} />
+              <BrandButton label="Add songs" onPress={() => router.push('/import')} />
             </View>
             <View style={{ flex: 1 }}>
               <BrandButton
