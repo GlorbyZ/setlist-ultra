@@ -69,7 +69,13 @@ export default function SongScreen() {
     [nextSong?.id, nextSong?.contentAst, nextSong?.chordpro, nextSong?.updatedAt],
   );
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg }}>
+        <ActivityIndicator color={theme.accent} />
+      </View>
+    );
+  }
 
   if (!song || !chart) {
     return (

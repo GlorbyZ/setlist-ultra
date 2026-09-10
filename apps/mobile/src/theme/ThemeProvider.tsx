@@ -42,7 +42,7 @@ async function writeStoredThemeId(id: ThemeId) {
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
-  const [themeId, setThemeIdState] = useState<ThemeId>('ultra-light');
+  const [themeId, setThemeIdState] = useState<ThemeId>('system');
 
   const resolved = resolveThemeId(themeId, systemScheme === 'dark');
   const theme = THEMES[resolved];
@@ -51,7 +51,7 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       const fromSecure = await readStoredThemeId();
-      let next: ThemeId = fromSecure ?? 'ultra-light';
+      let next: ThemeId = fromSecure ?? 'system';
       try {
         const state = await getAppState();
         if (isThemeId(state.themeId)) next = state.themeId;

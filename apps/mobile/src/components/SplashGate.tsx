@@ -11,13 +11,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 
+import { BrandMark } from '@/src/components/BrandMark';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { brand } from '@/src/theme';
-
-const logoMain = require('../../assets/brand/logo-wordmark.png');
-
-const LOGO_WIDTH = 280;
-const LOGO_ASPECT = 993 / 415;
+import { useTheme } from '@/src/theme';
 
 type Props = {
   fontsReady: boolean;
@@ -26,6 +22,7 @@ type Props = {
 
 export function SplashGate({ fontsReady, children }: Props) {
   const { loading } = useLibrary();
+  const { theme } = useTheme();
   const ready = fontsReady && !loading;
   const [visible, setVisible] = useState(true);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -80,15 +77,16 @@ export function SplashGate({ fontsReady, children }: Props) {
   }));
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.bg }]}>
       {children}
       {visible ? (
-        <Animated.View style={[styles.overlay, coverStyle]} pointerEvents="none" collapsable={false}>
-          <Animated.Image
-            source={logoMain}
-            resizeMode="contain"
-            style={[styles.logo, logoStyle]}
-          />
+        <Animated.View
+          style={[styles.overlay, coverStyle, { backgroundColor: theme.bg }]}
+          pointerEvents="none"
+          collapsable={false}>
+          <Animated.View style={logoStyle}>
+            <BrandMark height={72} />
+          </Animated.View>
         </Animated.View>
       ) : null}
     </View>
@@ -101,11 +99,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: brand.paper,
     zIndex: 50,
-  },
-  logo: {
-    width: LOGO_WIDTH,
-    height: LOGO_WIDTH / LOGO_ASPECT,
   },
 });

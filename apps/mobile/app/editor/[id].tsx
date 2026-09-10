@@ -87,7 +87,11 @@ export default function EditorScreen() {
   };
 
   if (!song) {
-    return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg }}>
+        <ActivityIndicator color={theme.accent} />
+      </View>
+    );
   }
 
   return (
