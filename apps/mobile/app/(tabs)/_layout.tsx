@@ -109,6 +109,8 @@ export default function TabLayout() {
           name="live"
           options={{
             title: 'Live',
+            // LiveChrome owns the centered song header — no app wordmark.
+            headerShown: false,
             tabBarIcon: ({ color, size, focused }) => (
               <TabIcon name="play" color={color} size={size} focused={focused} />
             ),

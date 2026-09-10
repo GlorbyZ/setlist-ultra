@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
 import { actionFromKey, type PedalAction } from '@/src/lib/pedals';
-import { MOTION_FAST, MOTION_MED, PressableScale } from '@/src/motion';
+import { MOTION_FAST, MOTION_MED } from '@/src/motion';
 import { BRAND_GRADIENT, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
@@ -82,6 +82,7 @@ export function LiveChrome({
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
   const bottomPad = Math.max(insets.bottom, 10);
+  const metaLine = [meta, onCapo ? `Capo ${capo}` : null].filter(Boolean).join(' · ');
 
   return (
     <View style={styles.shell}>
@@ -98,33 +99,32 @@ export function LiveChrome({
         />
       ) : null}
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
         <View style={styles.headerText}>
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
-          {meta ? (
-            <Text style={styles.meta} numberOfLines={1}>
-              {meta}
-            </Text>
+          {metaLine ? (
+            <Pressable
+              disabled={!onCapo}
+              onPress={() => {
+                if (!onCapo) return;
+                bump();
+                onCapo(1);
+              }}
+              onLongPress={() => {
+                if (!onCapo) return;
+                bump();
+                onCapo(-1);
+              }}
+              delayLongPress={280}
+              accessibilityLabel={onCapo ? `Capo ${capo}. Tap to raise, long-press to lower.` : undefined}>
+              <Text style={styles.meta} numberOfLines={1}>
+                {metaLine}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
-        {onCapo ? (
-          <Pressable
-            onPress={() => {
-              bump();
-              onCapo(1);
-            }}
-            onLongPress={() => {
-              bump();
-              onCapo(-1);
-            }}
-            delayLongPress={280}
-            style={styles.capo}
-            accessibilityLabel={`Capo ${capo}. Tap to raise, long-press to lower.`}>
-            <Text style={styles.capoText}>Capo {capo}</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       <View style={styles.stage}>{children}</View>
@@ -284,23 +284,23 @@ function makeStyles(t: AppTheme) {
     shell: { flex: 1, backgroundColor: t.bg },
     hidden: { position: 'absolute' as const, width: 1, height: 1, opacity: 0 },
     header: {
-      flexDirection: 'row' as const,
       alignItems: 'center' as const,
+      justifyContent: 'center' as const,
       paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: 8,
       borderBottomWidth: 1,
       borderBottomColor: t.border,
       backgroundColor: t.bg,
-      gap: 8,
       zIndex: 2,
     },
-    headerText: { flex: 1 },
+    headerText: { alignItems: 'center' as const, justifyContent: 'center' as const, maxWidth: '100%' as const },
     title: {
       color: t.text,
       fontSize: t.type.title.fontSize,
       lineHeight: t.type.title.lineHeight,
       fontWeight: t.type.title.fontWeight,
+      textAlign: 'center' as const,
     },
     meta: {
       color: t.muted,
@@ -308,15 +308,8 @@ function makeStyles(t: AppTheme) {
       fontSize: t.type.meta.fontSize,
       lineHeight: t.type.meta.lineHeight,
       fontWeight: t.type.meta.fontWeight,
+      textAlign: 'center' as const,
     },
-    capo: {
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: t.radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    capoText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
     stage: { flex: 1 },
     overlay: {
       position: 'absolute' as const,
