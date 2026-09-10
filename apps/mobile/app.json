@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.0",
+    "version": "5.0.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -102,7 +102,7 @@
           ]
         }
       ],
-      "versionCode": 50
+      "versionCode": 51
     },
     "web": {
       "bundler": "metro",
