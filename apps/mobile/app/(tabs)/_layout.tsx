@@ -11,10 +11,9 @@ import {
   SongsHeaderLeft,
   SongsHeaderRight,
   SongsHeaderTitle,
-  TabsHeaderLeft,
 } from '@/src/providers/SongsChromeProvider';
 import { PRESS_SPRING, useReduceMotion } from '@/src/motion';
-import { BRAND_GRADIENT, useTheme } from '@/src/theme';
+import { useTheme } from '@/src/theme';
 
 function TabIcon({
   name,
@@ -27,6 +26,7 @@ function TabIcon({
   size: number;
   focused: boolean;
 }) {
+  const { theme } = useTheme();
   const reduce = useReduceMotion();
   const scale = useSharedValue(1);
   useEffect(() => {
@@ -43,7 +43,7 @@ function TabIcon({
       <Ionicons name={name} size={size} color={color} />
       {focused ? (
         <LinearGradient
-          colors={[...BRAND_GRADIENT]}
+          colors={[...theme.gradient]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={{ marginTop: 4, height: 2, width: 22, borderRadius: 1 }}
@@ -64,16 +64,15 @@ export default function TabLayout() {
     <SongsChromeProvider>
       <Tabs
         screenOptions={{
-          headerLeft: () => <TabsHeaderLeft />,
-          headerTitle: () => null,
           headerTitleAlign: 'left',
-          headerLeftContainerStyle: { paddingLeft: 0, justifyContent: 'center' },
           headerStyle: { backgroundColor: theme.bg, height: 64 + insets.top },
+          headerTitleStyle: { color: theme.text, fontWeight: '700', fontSize: 18 },
           tabBarActiveTintColor: theme.accent,
           tabBarInactiveTintColor: theme.muted,
           tabBarActiveBackgroundColor: 'transparent',
           headerShadowVisible: false,
           headerTintColor: theme.text,
+          sceneStyle: { backgroundColor: theme.bg },
           tabBarStyle: {
             backgroundColor: theme.bg,
             borderTopColor: theme.border,
@@ -89,7 +88,8 @@ export default function TabLayout() {
             title: 'Songs',
             headerLeft: () => <SongsHeaderLeft />,
             headerTitle: () => <SongsHeaderTitle />,
-            headerTitleAlign: 'center',
+            headerTitleAlign: 'left',
+            headerLeftContainerStyle: { paddingLeft: 0, justifyContent: 'center' },
             headerRight: () => <SongsHeaderRight />,
             tabBarIcon: ({ color, size, focused }) => (
               <TabIcon name="musical-notes" color={color} size={size} focused={focused} />

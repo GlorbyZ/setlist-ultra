@@ -53,18 +53,18 @@ export function useSongsChrome() {
   return ctx;
 }
 
-/** Spacer so the centered logo stays balanced against the right hamburger. */
+/** Songs-only: SETLIST ULTRA wordmark on the left. No filter chevron. */
 export function SongsHeaderLeft() {
-  return <View style={{ width: 42, paddingLeft: 8 }} />;
-}
-
-/** Center: SETLIST ULTRA wordmark. */
-export function SongsHeaderTitle() {
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <BrandMark height={40} />
+    <View style={{ paddingLeft: 8, justifyContent: 'center' }}>
+      <BrandMark height={48} />
     </View>
   );
+}
+
+/** Songs title slot left empty so the wordmark owns the left side. */
+export function SongsHeaderTitle() {
+  return null;
 }
 
 /** Right: single overflow menu (library / lists). */
@@ -81,14 +81,6 @@ export function SongsHeaderRight() {
         accessibilityLabel={menuOpen ? 'Close menu' : 'Open menu'}>
         <Ionicons name={menuOpen ? 'close' : 'menu'} size={26} color={theme.text} />
       </Pressable>
-    </View>
-  );
-}
-
-export function TabsHeaderLeft() {
-  return (
-    <View style={{ paddingLeft: 8, justifyContent: 'center' }}>
-      <BrandMark height={48} />
     </View>
   );
 }
