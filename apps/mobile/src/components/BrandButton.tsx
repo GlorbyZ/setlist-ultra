@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -9,37 +10,40 @@ type Props = {
   onPress: () => void;
   disabled?: boolean;
   busy?: boolean;
+  /** Optional leading icon (e.g. Google mark). */
+  icon?: ReactNode;
   /** Drop bottom margin for dense action bars. */
   compact?: boolean;
 };
 
-export function BrandButton({ label, onPress, disabled, busy, compact }: Props) {
+export function BrandButton({ label, onPress, disabled, busy, icon, compact }: Props) {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const inactive = disabled && !busy;
   const gradient = theme.gradient;
+
+  const content = (
+    <View style={styles.row}>
+      {icon ? <View style={styles.icon}>{icon}</View> : null}
+      <Text style={inactive ? styles.disabledLabel : styles.label}>{label}</Text>
+    </View>
+  );
 
   return (
     <PressableScale
       onPress={onPress}
       disabled={disabled || busy}
       style={[styles.wrap, compact && styles.wrapCompact]}
->
+    >
       {inactive ? (
-        <View style={[styles.face, styles.disabledFill]}>
-          <Text style={styles.disabledLabel}>{label}</Text>
-        </View>
+        <View style={[styles.face, styles.disabledFill]}>{content}</View>
       ) : (
         <LinearGradient
           colors={[...gradient]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[styles.face, busy && styles.busy]}>
-          {busy ? (
-            <ActivityIndicator color={theme.accentText} />
-          ) : (
-            <Text style={styles.label}>{label}</Text>
-          )}
+          {busy ? <ActivityIndicator color={theme.accentText} /> : content}
         </LinearGradient>
       )}
     </PressableScale>
@@ -60,6 +64,13 @@ function makeStyles(t: AppTheme) {
       borderColor: 'transparent',
       minHeight: 48,
     },
+    row: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      gap: 10,
+    },
+    icon: { marginTop: 1 },
     busy: { opacity: 0.85 },
     label: { color: t.accentText, fontWeight: '700' as const, fontSize: 16 },
     disabledFill: { backgroundColor: t.panel, borderColor: t.border },

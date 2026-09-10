@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { AntDesign } from '@expo/vector-icons';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { config, isHostedConfigured } from '@/src/lib/config';
+import { isHostedConfigured } from '@/src/lib/config';
 import { cleanDuplicateSongs, exportSbpBytes } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
 import {
-  getAuthRedirectUri,
   hostedSessionEmail,
   hostedSignIn,
   hostedSignInWithGoogle,
@@ -18,7 +18,6 @@ import {
   isGoogleAuthConfigured,
   syncPersonalLibrary,
 } from '@/src/lib/hosted';
-import { managerClientHint, pushSnapshotToManager } from '@/src/lib/manager';
 import { THEME_OPTIONS, useTheme, useThemedStyles, type AppTheme, type ThemeId } from '@/src/theme';
 
 export default function SettingsScreen() {
@@ -137,6 +136,7 @@ export default function SettingsScreen() {
                 <BrandButton
                   label="Continue with Google"
                   busy={busy}
+                  icon={<AntDesign name="google" size={18} color={theme.accentText} />}
                   onPress={() =>
                     void run(async () => {
                       const user = await hostedSignInWithGoogle();
@@ -146,17 +146,6 @@ export default function SettingsScreen() {
                     })
                   }
                 />
-              ) : (
-                <Text style={styles.cardBody}>
-                  Google sign-in needs EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (and the same Client ID in Supabase Auth →
-                  Google).
-                </Text>
-              )}
-              {!config.googleAndroidClientId.trim() ? (
-                <Text style={styles.cardBody}>
-                  Android native client ID is empty — web OAuth + Expo redirect still works. Add
-                  EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID for native Google Sign-In / Drive later.
-                </Text>
               ) : null}
             </View>
           )}
@@ -171,16 +160,11 @@ export default function SettingsScreen() {
               })
             }
           />
-          <Text style={styles.meta}>OAuth redirect: {getAuthRedirectUri()}</Text>
         </>
       ) : (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Cloud sync is off.</Text>
-          <Text style={styles.cardBody}>Using this device only. Songs stay on this phone.</Text>
-          <Text style={styles.cardBody}>
-            To show Sign in / Sync now, set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in
-            apps/mobile/.env and restart Metro.
-          </Text>
+          <Text style={styles.cardBody}>Using this device only.</Text>
         </View>
       )}
 
@@ -217,27 +201,6 @@ export default function SettingsScreen() {
       </Pressable>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>UG proxy</Text>
-        <Text style={styles.cardBody}>{config.ugProxyUrl}</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>LAN Manager</Text>
-        <Text style={styles.cardBody}>{managerClientHint()}</Text>
-        <Text style={styles.cardBody}>{config.managerUrl}</Text>
-        <Pressable
-          style={styles.ghost}
-          onPress={() =>
-            void run(async () => {
-              await pushSnapshotToManager();
-              setDialog({ title: 'Pushed', body: `Snapshot sent to ${config.managerUrl}` });
-            })
-          }>
-          <Text style={styles.ghostText}>Push library to Manager</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
         <Text style={styles.cardTitle}>Pedals</Text>
         <Text style={styles.cardBody}>Map page-turners. Page Up/Down and arrows turn pages.</Text>
         <Text style={styles.cardBody}>This device: {Platform.OS}</Text>
@@ -268,7 +231,6 @@ function makeStyles(t: AppTheme) {
     body: { color: t.muted, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight, marginBottom: 12 },
     status: { color: t.accent, marginBottom: 16, fontWeight: '600' as const },
     signedIn: { color: t.text, fontWeight: '700' as const, marginBottom: 4 },
-    meta: { color: t.faint, fontSize: 11, marginBottom: 12 },
     themeRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 8 },
     themeChip: {
       flexDirection: 'row' as const,

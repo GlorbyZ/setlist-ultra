@@ -145,8 +145,13 @@ export async function hostedSignInWithGoogle() {
     throw new Error('Google sign-in did not complete.');
   }
 
-  const session = await createSessionFromUrl(result.url);
-  if (!session) throw new Error('Google sign-in returned no session. Check Supabase redirect allow-list.');
+  return completeOAuthFromUrl(result.url);
+}
+
+/** Complete OAuth from a deep-link / auth-session URL (callback route or openAuthSessionAsync). */
+export async function completeOAuthFromUrl(url: string) {
+  const session = await createSessionFromUrl(url);
+  if (!session) throw new Error('Sign-in returned no session. Try again from Settings.');
   await persistSupabaseSession(session.user.email, session.access_token, session.refresh_token);
   return session.user;
 }

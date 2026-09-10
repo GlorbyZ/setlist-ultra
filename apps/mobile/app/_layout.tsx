@@ -82,6 +82,7 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: theme.bg },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="song/[id]" options={{ title: '', headerShadowVisible: false }} />
         <Stack.Screen name="editor/[id]" options={{ title: 'Editor' }} />
         <Stack.Screen name="setlist/[id]" options={{ title: 'Set' }} />
