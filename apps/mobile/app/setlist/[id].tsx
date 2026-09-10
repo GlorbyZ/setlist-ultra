@@ -54,18 +54,9 @@ export default function SetlistScreen() {
       setSetlist(setlistRow);
       setItems(itemRows);
       const songIds = itemRows.map((item) => item.songId).filter(Boolean) as string[];
-      // Prefer already-loaded library rows; batch-fetch only missing ids.
-      const map: Record<string, SongRow> = {};
-      const missing: string[] = [];
-      for (const songId of songIds) {
-        const fromLib = songs.find((s) => s.id === songId);
-        if (fromLib) map[songId] = fromLib;
-        else missing.push(songId);
-      }
-      if (missing.length) {
-        const fetched = await getSongsByIds(missing);
-        for (const song of fetched) map[song.id] = song;
-      }
+      // One batched fetch — do not depend on library songs[] (new ref every refresh => load loop).
+      const fetched = await getSongsByIds(songIds);
+      const map: Record<string, SongRow> = Object.fromEntries(fetched.map((s) => [s.id, s]));
       setSongsById(map);
       const total = itemRows.reduce((sum, item) => {
         if (item.itemType === 'timer') return sum + (item.timerSeconds ?? 0);
@@ -76,7 +67,7 @@ export default function SetlistScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id, songs]);
+  }, [id]);
 
   useEffect(() => {
     void load();

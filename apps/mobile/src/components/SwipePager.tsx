@@ -1,7 +1,8 @@
-﻿import { type ReactNode, useLayoutEffect } from 'react';
+import { type ReactNode, useLayoutEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -10,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { MOTION_FAST, MOTION_MED, SNAP_SPRING, useReduceMotion } from '@/src/motion';
+import { useTheme } from '@/src/theme';
 
 type Props = {
   children: ReactNode;
@@ -34,14 +36,18 @@ export function SwipePager({
   enabled = true,
 }: Props) {
   const { width } = useWindowDimensions();
+  const { theme } = useTheme();
   const reduceMotion = useReduceMotion();
   const tx = useSharedValue(0);
   const opacity = useSharedValue(1);
   const locked = useSharedValue(false);
 
-  // Commit new center page, then snap transform before paint — avoids
-  // one-frame flash of the wrong slot after a completed swipe.
+  // After JS commits the new center page, snap transform on this layout pass
+  // before paint. cancelAnimation avoids a late withTiming frame painting the
+  // outgoing chart on top of the incoming page (swipe ghost/flash).
   useLayoutEffect(() => {
+    cancelAnimation(tx);
+    cancelAnimation(opacity);
     tx.value = 0;
     opacity.value = 1;
     locked.value = false;
@@ -51,6 +57,8 @@ export function SwipePager({
     if (dir === 1 && onNext) onNext();
     if (dir === -1 && onPrev) onPrev();
     if (!pageKey) {
+      cancelAnimation(tx);
+      cancelAnimation(opacity);
       tx.value = 0;
       opacity.value = 1;
       locked.value = false;
@@ -66,7 +74,6 @@ export function SwipePager({
           return;
         }
         runOnJS(settle)(dir);
-        opacity.value = withTiming(1, { duration: MOTION_FAST });
       });
       return;
     }
@@ -76,6 +83,9 @@ export function SwipePager({
         locked.value = false;
         return;
       }
+      // Hide for the commit frame so a stale tx cannot flash the wrong slot
+      // (or the outgoing song) while React swaps prev/center/next.
+      opacity.value = 0;
       runOnJS(settle)(dir);
     });
   };
@@ -117,17 +127,19 @@ export function SwipePager({
     opacity: opacity.value,
   }));
 
+  const pageStyle = [styles.page, { width, backgroundColor: theme.bg }];
+
   return (
     <GestureDetector gesture={pan}>
-      <View style={styles.viewport}>
+      <View style={[styles.viewport, { backgroundColor: theme.bg }]}>
         <Animated.View style={[styles.track, { width: width * 3 }, animatedStyle]}>
-          <View style={[styles.page, { width }]} collapsable={false}>
+          <View style={pageStyle} collapsable={false}>
             {prevPage}
           </View>
-          <View style={[styles.page, { width }]} collapsable={false}>
+          <View style={pageStyle} collapsable={false}>
             {children}
           </View>
-          <View style={[styles.page, { width }]} collapsable={false}>
+          <View style={pageStyle} collapsable={false}>
             {nextPage}
           </View>
         </Animated.View>
@@ -139,5 +151,5 @@ export function SwipePager({
 const styles = StyleSheet.create({
   viewport: { flex: 1, overflow: 'hidden' },
   track: { flex: 1, flexDirection: 'row' },
-  page: { flex: 1 },
+  page: { flex: 1, overflow: 'hidden' },
 });

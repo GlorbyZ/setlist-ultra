@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import type { ChordSlot } from '@setlist-ultra/core';
 import { displayChord } from '@setlist-ultra/core';
 import { Text } from '@/components/Themed';
@@ -13,11 +13,22 @@ type Props = {
   fontSize?: number;
 };
 
+/** Non-space probe — Android often reports width 0 for space-only Text. */
+const WIDTH_PROBE = 'MMMMMMMMMM';
+const WIDTH_PROBE_LEN = WIDTH_PROBE.length;
+
 /**
  * Songbook Pro–style chord layout:
  * - Same fontSize / weight / family on chord + lyric (no size-1 / bold chords)
  * - ChordSlot.at is a logical lyric-character anchor
- * - Chord Text is absolute-positioned at measured width of lyric.slice(0, at)
+ * - Chord Text is absolute-positioned at at * measuredMonoCharWidth
+ *
+ * Uses a monospace char-width probe instead of per-prefix onLayout. Prefix
+ * measurement was returning 0 on Android (absolute + opacity 0, and space-only
+ * slices), which left-stacked every chord at x=0.
+ *
+ * While the probe is pending (or if it fails), fall back to a mono space-column
+ * chord row so Live never paints a left-stacked absolute blob.
  */
 export function ChordLyricLine({
   lyric,
@@ -35,27 +46,34 @@ export function ChordLyricLine({
       fontSize: size,
       fontFamily: 'SpaceMono' as const,
       fontWeight: theme.type.chart.fontWeight,
+      ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : null),
     }),
     [size, theme.type.chart.fontWeight],
   );
 
   const sorted = useMemo(() => [...slots].sort((a, b) => a.at - b.at), [slots]);
-  const anchors = useMemo(
-    () => [...new Set(sorted.map((slot) => Math.max(0, slot.at)))].sort((a, b) => a - b),
-    [sorted],
-  );
-
   const isChordOnly = !lyric.trim() && sorted.length > 0;
-  const [prefixWidths, setPrefixWidths] = useState<Record<number, number>>(() =>
-    (anchors.includes(0) ? { 0: 0 } : {}) as Record<number, number>,
-  );
+
+  const [charWidth, setCharWidth] = useState(0);
 
   useEffect(() => {
-    setPrefixWidths((anchors.includes(0) ? { 0: 0 } : {}) as Record<number, number>);
-  }, [lyric, size, theme.type.chart.fontWeight, anchors]);
+    setCharWidth(0);
+  }, [size, theme.type.chart.fontWeight]);
+
+  const probe = (
+    <View style={styles.probeBox} collapsable={false}>
+      <Text
+        style={chartFont}
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0) setCharWidth(w / WIDTH_PROBE_LEN);
+        }}>
+        {WIDTH_PROBE}
+      </Text>
+    </View>
+  );
 
   if (isChordOnly) {
-    // Chord-only lines: mono space row is still useful (no lyric to measure against).
     const chordRow = buildMonoChordRow(sorted, transpose, capo);
     return (
       <View style={styles.container}>
@@ -65,24 +83,24 @@ export function ChordLyricLine({
     );
   }
 
+  if (charWidth <= 0) {
+    const chordRow = buildMonoChordRow(sorted, transpose, capo);
+    return (
+      <View style={styles.container}>
+        {probe}
+        <Text style={[chartFont, { color: theme.accent, lineHeight: chordLineHeight }]}>{chordRow || ' '}</Text>
+        <Text style={[chartFont, { color: theme.text, lineHeight: lyricLineHeight }]}>{lyric || ' '}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {anchors.map((at) => (
-        <Text
-          key={`measure-${at}`}
-          style={[chartFont, styles.measure]}
-          onLayout={(e) => {
-            const width = e.nativeEvent.layout.width;
-            setPrefixWidths((prev) => (prev[at] === width ? prev : { ...prev, [at]: width }));
-          }}>
-          {lyric.slice(0, at)}
-        </Text>
-      ))}
-
+      {probe}
       <View style={[styles.chordRow, { height: chordLineHeight }]}>
         {sorted.map((slot, index) => {
           const at = Math.max(0, slot.at);
-          const left = prefixWidths[at] ?? 0;
+          const left = at * charWidth;
           return (
             <Text
               key={`${slot.at}-${slot.chord}-${index}`}
@@ -119,11 +137,12 @@ const styles = StyleSheet.create({
   container: { marginBottom: 14 },
   chordRow: { position: 'relative', width: '100%' },
   chord: { position: 'absolute', top: 0 },
-  measure: {
+  probeBox: {
     position: 'absolute',
-    opacity: 0,
     left: 0,
     top: 0,
-    zIndex: -1,
+    height: 0,
+    overflow: 'hidden',
+    opacity: 0,
   },
 });

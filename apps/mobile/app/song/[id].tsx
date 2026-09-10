@@ -19,7 +19,6 @@ import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCac
 import { patchAppState } from '@/src/lib/repository';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
-import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function SongScreen() {
@@ -27,8 +26,7 @@ export default function SongScreen() {
   const styles = useThemedStyles(makeStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { refresh } = useLibrary();
-  const { queue, index, song, loading, go, goTo, reload, setContext, hasSetContext } = useLiveQueue(id);
+  const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue(id);
   const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
   const [hideChords, setHideChords] = useState(false);
@@ -50,7 +48,7 @@ export default function SongScreen() {
     setScrolling(false);
     void patchAppState({ currentSongId: song.id });
     if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
-  }, [song?.id, song?.capo, song?.keyShift]);
+  }, [song?.id]);
 
   useEffect(() => {
     return subscribePedals((action) => {
@@ -61,30 +59,22 @@ export default function SongScreen() {
     });
   }, [go]);
 
-  const persistAndRefresh = useCallback(
-    async (patch: { keyShift?: number; capo?: number }) => {
-      if (!song) return;
-      await persistLiveKeyCapo(song.id, patch);
-      await refresh({ silent: true });
-      await reload();
-    },
-    [song, refresh, reload],
-  );
-
   const changeKeyShift = useCallback(
     (next: number) => {
       setKeyShift(next);
-      void persistAndRefresh({ keyShift: next });
+      if (!song) return;
+      void persistLiveKeyCapo(song.id, { keyShift: next });
     },
-    [persistAndRefresh],
+    [song],
   );
 
   const changeCapo = useCallback(
     (next: number) => {
       setCapo(next);
-      void persistAndRefresh({ capo: next });
+      if (!song) return;
+      void persistLiveKeyCapo(song.id, { capo: next });
     },
-    [persistAndRefresh],
+    [song],
   );
 
   const chart = useMemo(() => (song ? getCachedSongDocument(song) : null), [song?.id, song?.contentAst, song?.chordpro, song?.updatedAt]);

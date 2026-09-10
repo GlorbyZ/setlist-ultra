@@ -20,15 +20,13 @@ import {
 import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
-import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function LiveTab() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const { refresh } = useLibrary();
-  const { queue, index, song, loading, go, goTo, reload, setContext, hasSetContext } = useLiveQueue();
+  const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue();
   const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
   const [hideChords, setHideChords] = useState(false);
@@ -43,13 +41,15 @@ export default function LiveTab() {
     warmSongDocuments([prevSong, song, nextSong]);
   }, [prevSong?.id, song?.id, nextSong?.id, prevSong?.updatedAt, song?.updatedAt, nextSong?.updatedAt]);
 
+  // Sync Key/Capo from storage only when the active song changes.
+  // Do NOT depend on song.capo/keyShift — persist writes those and would feedback-loop with refresh/reload.
   useEffect(() => {
     if (!song) return;
     setCapo(song.capo ?? 0);
     setKeyShift(song.keyShift ?? 0);
     setScrolling(false);
     if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
-  }, [song?.id, song?.capo, song?.keyShift]);
+  }, [song?.id]);
 
   useEffect(() => {
     return subscribePedals((action) => {
@@ -59,30 +59,24 @@ export default function LiveTab() {
     });
   }, [go]);
 
-  const persistAndRefresh = useCallback(
-    async (patch: { keyShift?: number; capo?: number }) => {
-      if (!song) return;
-      await persistLiveKeyCapo(song.id, patch);
-      await refresh({ silent: true });
-      await reload();
-    },
-    [song, refresh, reload],
-  );
-
+  // Persist fire-and-forget. Local state is source of truth until song.id changes;
+  // useLiveQueue reload on focus picks up DB values. Avoid refresh+reload here (update-depth loop).
   const changeKeyShift = useCallback(
     (next: number) => {
       setKeyShift(next);
-      void persistAndRefresh({ keyShift: next });
+      if (!song) return;
+      void persistLiveKeyCapo(song.id, { keyShift: next });
     },
-    [persistAndRefresh],
+    [song],
   );
 
   const changeCapo = useCallback(
     (next: number) => {
       setCapo(next);
-      void persistAndRefresh({ capo: next });
+      if (!song) return;
+      void persistLiveKeyCapo(song.id, { capo: next });
     },
-    [persistAndRefresh],
+    [song],
   );
 
   const chart = useMemo(() => (song ? getCachedSongDocument(song) : null), [song?.id, song?.contentAst, song?.chordpro, song?.updatedAt]);
