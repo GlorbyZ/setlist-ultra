@@ -277,16 +277,10 @@ export default function SongsScreen() {
               style={[styles.iconBtn, filtersOpen && styles.iconBtnOn]}
               onPress={() => setFiltersOpen((v) => !v)}
               accessibilityRole="button"
-              accessibilityLabel="Sort and filter">
+              accessibilityLabel={filtersOpen ? 'Collapse sort and filter' : 'Sort and filter'}>
               <Ionicons name="options-outline" size={22} color={filtersOpen ? theme.accent : theme.text} />
             </PressableScale>
-            <PressableScale
-              style={[styles.iconBtn, filtersOpen && styles.iconBtnOn]}
-              onPress={() => setFiltersOpen((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={filtersOpen ? 'Collapse filters' : 'Expand filters'}>
-              <Ionicons name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={22} color={filtersOpen ? theme.accent : theme.text} />
-            </PressableScale>
+
           </View>
           <SongsFilterPanel
             open={filtersOpen}
