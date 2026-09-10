@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.2",
+    "version": "5.0.3",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -47,7 +47,7 @@
           }
         ]
       },
-      "buildNumber": "41"
+      "buildNumber": "42"
     },
     "android": {
       "package": "com.setlistultra.app",
@@ -61,48 +61,61 @@
       "predictiveBackGestureEnabled": false,
       "intentFilters": [
         {
-          "action": "VIEW",
-          "category": [
-            "DEFAULT",
-            "BROWSABLE"
-          ],
+          "action": "SEND",
+          "category": ["DEFAULT"],
           "data": [
-            {
-              "scheme": "content",
-              "mimeType": "application/octet-stream"
-            },
-            {
-              "scheme": "content",
-              "mimeType": "application/zip"
-            },
-            {
-              "scheme": "content",
-              "mimeType": "text/plain"
-            },
-            {
-              "scheme": "file",
-              "pathPattern": ".*\\\\.sbp"
-            },
-            {
-              "scheme": "file",
-              "pathPattern": ".*\\\\.sbpbackup"
-            },
-            {
-              "scheme": "file",
-              "pathPattern": ".*\\\\.cho"
-            },
-            {
-              "scheme": "file",
-              "pathPattern": ".*\\\\.chopro"
-            },
-            {
-              "scheme": "file",
-              "pathPattern": ".*\\\\.crd"
-            }
+            { "mimeType": "*/*" },
+            { "mimeType": "application/zip" },
+            { "mimeType": "application/x-zip" },
+            { "mimeType": "application/x-zip-compressed" },
+            { "mimeType": "application/octet-stream" },
+            { "mimeType": "text/*" }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [
+            { "scheme": "content", "mimeType": "application/octet-stream" },
+            { "scheme": "content", "mimeType": "application/zip" },
+            { "scheme": "content", "mimeType": "application/x-zip" },
+            { "scheme": "content", "mimeType": "application/x-zip-compressed" },
+            { "scheme": "content", "mimeType": "text/plain" },
+            { "scheme": "content", "mimeType": "text/*" },
+            { "scheme": "file", "mimeType": "application/octet-stream" },
+            { "scheme": "file", "mimeType": "application/zip" },
+            { "scheme": "file", "mimeType": "application/x-zip" },
+            { "scheme": "file", "mimeType": "application/x-zip-compressed" },
+            { "scheme": "file", "mimeType": "text/plain" },
+            { "scheme": "file", "mimeType": "text/*" }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbp" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbpbackup" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.cho" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.chopro" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.crd" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.onsong" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.pro" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.txt" },
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.zip" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbp" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbpbackup" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.cho" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.chopro" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.crd" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.onsong" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.pro" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.txt" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.zip" }
           ]
         }
       ],
-      "versionCode": 52
+      "versionCode": 60
     },
     "web": {
       "bundler": "metro",
@@ -139,13 +152,17 @@
         {
           "iosActivationRules": {
             "NSExtensionActivationSupportsFileWithMaxCount": 1,
-            "NSExtensionActivationSupportsText": true
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1
           },
           "androidIntentFilters": [
             "*/*",
             "application/zip",
+            "application/x-zip",
+            "application/x-zip-compressed",
             "application/octet-stream",
-            "text/plain"
+            "text/*"
           ]
         }
       ],

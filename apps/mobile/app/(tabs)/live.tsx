@@ -18,7 +18,9 @@ import {
   songMetaLine,
   wrapCapo,
 } from '@/src/lib/liveKeyCapo';
+import { useKeepAwake } from 'expo-keep-awake';
 import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
+import { liveScrollFor, rememberLiveScroll } from '@/src/lib/liveSession';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -28,6 +30,7 @@ export default function LiveTab() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
+  useKeepAwake();
   const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue();
   const { fontSize, setFontSize, hideChords, setHideChords } = useLiveChartSession();
   const [keyShift, setKeyShift] = useState(0);
@@ -58,6 +61,7 @@ export default function LiveTab() {
       if (action === 'next') go(1);
       if (action === 'prev') go(-1);
       if (action === 'scrollDown') setScrolling(true);
+      if (action === 'scrollUp') viewerRef.current?.scrollBy(-180);
     });
   }, [go]);
 
@@ -145,16 +149,18 @@ export default function LiveTab() {
         capo={capo}
         onCapo={(d) => changeCapo(wrapCapo(capo, d))}
         reserveTopLeft={reserveTopLeft}>
-        <SongViewer
-          ref={viewerRef}
-          document={chart}
-          transpose={keyShift}
-          capo={capo}
-          hideChords={hideChords}
-          autoScrollSeconds={scrolling ? duration : undefined}
-          fontSize={fontSize}
-          onFontSizeChange={setFontSize}
-        />
+          <SongViewer
+            ref={viewerRef}
+            document={chart}
+            transpose={keyShift}
+            capo={capo}
+            hideChords={hideChords}
+            autoScrollSeconds={scrolling ? duration : undefined}
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
+            initialScrollY={liveScrollFor(song.id)}
+            onScrollOffset={(y) => rememberLiveScroll(song.id, y)}
+          />
       </LiveSongPage>
     ),
   });
@@ -205,6 +211,7 @@ export default function LiveTab() {
           if (action === 'next') go(1);
           if (action === 'prev') go(-1);
           if (action === 'scrollDown') setScrolling(true);
+          if (action === 'scrollUp') viewerRef.current?.scrollBy(-180);
         }}>
         <SwipePager
           index={index}

@@ -46,12 +46,24 @@ export type ChatCompletionRequest = {
   model?: string;
   messages: ChatMessage[];
   temperature?: number;
+  signal?: AbortSignal;
+  deadlineMs?: number;
+  maxOutputTokens?: number;
+  /** Same-provider model walk only. Never switches providers. Default true for chat. */
+  allowModelFallback?: boolean;
+  /** Reject MAX_TOKENS / truncated completions. */
+  requireComplete?: boolean;
 };
+
+export type ChatFinishReason = 'stop' | 'max_tokens' | 'safety' | 'other';
 
 export type ChatCompletionResult = {
   text: string;
   model: string;
   provider: AiProviderId;
+  usedFallback?: boolean;
+  finishReason?: ChatFinishReason;
+  truncated?: boolean;
 };
 
 export type AiChatClient = {

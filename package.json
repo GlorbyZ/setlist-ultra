@@ -14,7 +14,7 @@
     "android:apk": "npm run android:apk --workspace=mobile",
     "ug-proxy": "npm run start --workspace=ug-proxy",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspace=@setlist-ultra/core",
+    "test": "npm run test --workspace=@setlist-ultra/core && npm run test --workspace=@setlist-ultra/db && npm run test --workspace=mobile",
     "manager": "npm run start --workspace=manager",
     "web:export": "npm run web:export --workspace=mobile"
   }

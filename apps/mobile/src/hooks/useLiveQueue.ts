@@ -8,9 +8,9 @@ import {
   getSetlistItems,
   getSong,
   getSongsByIds,
+  listSongs,
   patchAppState,
 } from '@/src/lib/repository';
-import { useLibrary } from '@/src/providers/LibraryProvider';
 import type { SongRow } from '@setlist-ultra/db';
 
 export type LiveSetContext = {
@@ -20,7 +20,6 @@ export type LiveSetContext = {
 };
 
 export function useLiveQueue(preferredSongId?: string) {
-  const { songs } = useLibrary();
   const [queue, setQueue] = useState<SongRow[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -29,7 +28,8 @@ export function useLiveQueue(preferredSongId?: string) {
   const reload = useCallback(async () => {
     const load = async () => {
       const state = await getAppState();
-      let list: SongRow[] = songs;
+      const librarySongs = await listSongs();
+      let list: SongRow[] = librarySongs;
       let nextIndex = 0;
       let nextSet: LiveSetContext | null = null;
 
@@ -52,12 +52,16 @@ export function useLiveQueue(preferredSongId?: string) {
       } else {
         const preferred = preferredSongId ?? state.currentSongId;
         if (preferred) {
-          const fromLibrary = songs.find((song) => song.id === preferred);
+          const fromLibrary = librarySongs.find((song) => song.id === preferred);
           const row = fromLibrary ?? (await getSong(preferred));
-          list = fromLibrary ? songs : row ? [row, ...songs.filter((song) => song.id !== row.id)] : songs;
+          list = fromLibrary
+            ? librarySongs
+            : row
+              ? [row, ...librarySongs.filter((song) => song.id !== row.id)]
+              : librarySongs;
           nextIndex = Math.max(0, list.findIndex((song) => song.id === preferred));
         } else {
-          list = songs;
+          list = librarySongs;
           nextIndex = 0;
         }
       }
@@ -89,7 +93,7 @@ export function useLiveQueue(preferredSongId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [preferredSongId, songs]);
+  }, [preferredSongId]);
 
   const reloadRef = useRef(reload);
   reloadRef.current = reload;

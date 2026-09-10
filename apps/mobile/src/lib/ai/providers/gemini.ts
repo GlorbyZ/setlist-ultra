@@ -1,10 +1,18 @@
+import { AiError, classifyProviderMessage, redactSecrets } from '../errors';
+import { assertNoKeyInUrl, fetchJson, safeErrorMessage, withDeadline } from '../http';
 import {
   GEMINI_DEFAULT_MODEL,
   isGeminiModelUnavailableError,
   modelCandidates,
   parseSuggestedGeminiModel,
 } from '../models';
-import type { AiChatClient, ChatCompletionRequest, ChatCompletionResult, ChatMessage } from '../types';
+import type {
+  AiChatClient,
+  ChatCompletionRequest,
+  ChatCompletionResult,
+  ChatFinishReason,
+  ChatMessage,
+} from '../types';
 
 function toGeminiContents(messages: ChatMessage[]) {
   const systemParts: string[] = [];
@@ -37,49 +45,89 @@ function toGeminiContents(messages: ChatMessage[]) {
   };
 }
 
+function mapFinishReason(reason: string | undefined): ChatFinishReason {
+  const upper = (reason ?? '').toUpperCase();
+  if (upper === 'MAX_TOKENS') return 'max_tokens';
+  if (upper === 'SAFETY' || upper === 'RECITATION' || upper === 'BLOCKED') return 'safety';
+  if (upper === 'STOP' || upper === 'END_TURN') return 'stop';
+  return 'other';
+}
+
+type GeminiResponse = {
+  error?: { message?: string };
+  candidates?: {
+    finishReason?: string;
+    content?: { parts?: { text?: string }[] };
+  }[];
+  promptFeedback?: { blockReason?: string };
+};
+
 async function generateOnce(
-  apiKey: string,
+  req: ChatCompletionRequest,
   model: string,
-  messages: ChatMessage[],
-  temperature: number,
 ): Promise<ChatCompletionResult> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const body = toGeminiContents(messages);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  assertNoKeyInUrl(url);
+  const body = toGeminiContents(req.messages);
+  const deadline = withDeadline(req.signal, req.deadlineMs ?? 45_000);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...body,
-      generationConfig: {
-        temperature,
+  try {
+    const { status, json } = await fetchJson<GeminiResponse>(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': req.apiKey,
       },
-    }),
-  });
+      body: JSON.stringify({
+        ...body,
+        generationConfig: {
+          temperature: req.temperature ?? 0.7,
+          maxOutputTokens: req.maxOutputTokens ?? 2048,
+        },
+      }),
+      signal: deadline.signal,
+    });
 
-  const json = (await res.json()) as {
-    error?: { message?: string };
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
+    if (status >= 400) {
+      const message = safeErrorMessage(status, json.error?.message);
+      throw new AiError(classifyProviderMessage(message, status), message, { status });
+    }
 
-  if (!res.ok) {
-    throw new Error(json.error?.message || `Gemini request failed (${res.status})`);
+    if (json.promptFeedback?.blockReason) {
+      throw new AiError('safety', `Gemini blocked the prompt (${json.promptFeedback.blockReason}).`);
+    }
+
+    const candidate = json.candidates?.[0];
+    const finishReason = mapFinishReason(candidate?.finishReason);
+    const text =
+      candidate?.content?.parts
+        ?.map((p) => p.text ?? '')
+        .join('')
+        .trim() ?? '';
+
+    if (finishReason === 'safety') {
+      throw new AiError('safety', 'Gemini refused this request.');
+    }
+    if (!text) {
+      throw new AiError('unknown', 'Gemini returned an empty response.');
+    }
+    if (finishReason === 'max_tokens') {
+      if (req.requireComplete) {
+        throw new AiError('truncated', 'Gemini truncated the response before it was complete.', { rawText: text });
+      }
+      return { text, model, provider: 'gemini', finishReason, truncated: true };
+    }
+
+    return { text, model, provider: 'gemini', finishReason };
+  } finally {
+    deadline.dispose();
   }
-
-  const text =
-    json.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text ?? '')
-      .join('')
-      .trim() ?? '';
-
-  if (!text) throw new Error('Gemini returned an empty response.');
-
-  return { text, model, provider: 'gemini' };
 }
 
 async function complete(req: ChatCompletionRequest): Promise<ChatCompletionResult> {
   const preferred = req.model?.trim() || GEMINI_DEFAULT_MODEL;
-  const candidates = modelCandidates('gemini', preferred);
+  const allowFallback = req.allowModelFallback !== false;
+  const candidates = allowFallback ? modelCandidates('gemini', preferred) : [preferred];
   const tried = new Set<string>();
   let lastError: Error | null = null;
   let suggestedRetryUsed = false;
@@ -90,16 +138,16 @@ async function complete(req: ChatCompletionRequest): Promise<ChatCompletionResul
     tried.add(next);
 
     try {
-      return await generateOnce(req.apiKey, next, req.messages, req.temperature ?? 0.7);
+      const result = await generateOnce(req, next);
+      return { ...result, usedFallback: next !== preferred };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSecrets(err instanceof Error ? err.message : String(err));
       lastError = err instanceof Error ? err : new Error(message);
 
-      if (!isGeminiModelUnavailableError(message)) {
+      if (!allowFallback || !isGeminiModelUnavailableError(message)) {
         throw lastError;
       }
 
-      // Prefer Google's suggested models/<id> once, then continue fallback walk.
       if (!suggestedRetryUsed) {
         const suggested = parseSuggestedGeminiModel(message);
         if (suggested && !tried.has(suggested)) {
@@ -110,7 +158,7 @@ async function complete(req: ChatCompletionRequest): Promise<ChatCompletionResul
     }
   }
 
-  throw lastError ?? new Error('Gemini request failed (no model available).');
+  throw lastError ?? new AiError('unavailable_model', 'Gemini request failed (no model available).');
 }
 
 export const geminiClient: AiChatClient = {

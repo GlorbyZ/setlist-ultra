@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { fingerprintContent, md5 } from '../hash/md5';
+import { inspectUnzippedArchive } from '../import/inspect';
 import type {
   PackSbpOptions,
   ParsedSbpArchive,
@@ -110,6 +111,7 @@ export function parseSbpArchive(bytes: Uint8Array, kindHint?: SbpArchiveKind): P
   } catch {
     throw new Error('Not a valid SBP ZIP archive');
   }
+  inspectUnzippedArchive(files, bytes.byteLength);
 
   const dataBytes = findEntry(files, 'dataFile.txt');
   if (!dataBytes) {

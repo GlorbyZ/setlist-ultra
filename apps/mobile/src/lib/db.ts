@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { drizzle } from 'drizzle-orm/expo-sqlite';
-import { MIGRATION_SQL } from '@setlist-ultra/db';
+import { applyMigrations } from '@setlist-ultra/db';
 import * as schema from '@setlist-ultra/db';
 
 type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -18,12 +18,10 @@ export function isNativeDbDead(error: unknown) {
 async function openDatabase(): Promise<DrizzleDb> {
   const sqlite = await SQLite.openDatabaseAsync('setlist-ultra-v2.db');
   nativeDb = sqlite;
-  const statements = MIGRATION_SQL.split(';')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  for (const statement of statements) {
-    await sqlite.execAsync(statement);
-  }
+  await applyMigrations({
+    exec: (sql) => sqlite.execAsync(sql),
+    get: (sql) => sqlite.getFirstAsync(sql),
+  });
   try {
     await sqlite.execAsync(
       `ALTER TABLE app_state ADD COLUMN theme_id TEXT NOT NULL DEFAULT 'ultra-light'`,
@@ -60,6 +58,16 @@ export async function getDatabase() {
   } finally {
     opening = null;
   }
+}
+
+export async function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  await getDatabase();
+  if (!nativeDb) throw new Error('Database is not open');
+  let result: T | undefined;
+  await nativeDb.withTransactionAsync(async () => {
+    result = await fn();
+  });
+  return result as T;
 }
 
 /** Re-open once if expo-sqlite's native handle was nulled (Android prepareSync NPE). */

@@ -21,10 +21,13 @@ type Props = {
   onFontSizeChange?: (size: number) => void;
   onScrollBy?: (delta: number) => void;
   compact?: boolean;
+  initialScrollY?: number;
+  onScrollOffset?: (y: number) => void;
 };
 
 export type SongViewerHandle = {
   scrollToNextSection: () => void;
+  scrollBy: (delta: number) => void;
 };
 
 export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewer(
@@ -37,6 +40,8 @@ export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewe
     fontSize,
     onFontSizeChange,
     compact = false,
+    initialScrollY = 0,
+    onScrollOffset,
   },
   ref,
 ) {
@@ -51,6 +56,7 @@ export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewe
   const [contentH, setContentH] = useState(1);
   const [layoutH, setLayoutH] = useState(1);
   const scrollYRef = useRef(0);
+  const restoredScroll = useRef(false);
   const sectionYRef = useRef<Record<string, number>>({});
   const lineRelYRef = useRef<Record<string, { sectionId: string; y: number }>>({});
   const jumpYRef = useRef<Record<string, number>>({});
@@ -86,7 +92,24 @@ export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewe
       const dest = next ?? ordered[0];
       scrollRef.current?.scrollTo({ y: Math.max(0, dest.y), animated: true });
     },
+    scrollBy(delta: number) {
+      const next = Math.max(0, scrollYRef.current + delta);
+      scrollYRef.current = next;
+      scrollRef.current?.scrollTo({ y: next, animated: true });
+      onScrollOffset?.(next);
+    },
   }));
+
+  useEffect(() => {
+    restoredScroll.current = false;
+  }, [document]);
+
+  useEffect(() => {
+    if (restoredScroll.current || !initialScrollY || contentH < 8) return;
+    restoredScroll.current = true;
+    scrollYRef.current = initialScrollY;
+    scrollRef.current?.scrollTo({ y: initialScrollY, animated: false });
+  }, [contentH, initialScrollY, document]);
 
   useEffect(() => {
     if (autoScrollSeconds == null) return;
@@ -127,7 +150,9 @@ export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewe
           },
         ]}
         onScroll={(e) => {
-          scrollYRef.current = e.nativeEvent.contentOffset.y;
+          const y = e.nativeEvent.contentOffset.y;
+          scrollYRef.current = y;
+          onScrollOffset?.(y);
         }}
         scrollEventThrottle={16}
         onContentSizeChange={(_, h) => setContentH(h)}

@@ -8,13 +8,25 @@ type CacheEntry = { sig: string; doc: SongDocument };
 const MAX_ENTRIES = 24;
 const cache = new Map<string, CacheEntry>();
 
-function signature(row: { id: string; chordpro?: string | null; contentAst: string; updatedAt?: string }) {
-  return `${row.updatedAt ?? ''}|${row.contentAst.length}|${row.chordpro?.length ?? 0}`;
+function signature(row: {
+  id: string;
+  revisionId?: string | null;
+  chordpro?: string | null;
+  contentAst: string;
+  updatedAt?: string;
+}) {
+  return `${row.revisionId ?? ''}|${row.updatedAt ?? ''}|${row.contentAst.length}|${row.chordpro?.length ?? 0}`;
 }
 
 /** Parse once per song revision; keep hot for Live neighbor swipes. */
 export function getCachedSongDocument(
-  row: { id: string; chordpro?: string | null; contentAst: string; updatedAt?: string },
+  row: {
+    id: string;
+    revisionId?: string | null;
+    chordpro?: string | null;
+    contentAst: string;
+    updatedAt?: string;
+  },
 ): SongDocument {
   const sig = signature(row);
   const hit = cache.get(row.id);

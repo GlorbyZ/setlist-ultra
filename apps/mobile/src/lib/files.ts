@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-export async function pickBinaryFile(accept = '.sbp,.sbpbackup,.cho,.chopro,.crd,.txt,.zip'): Promise<{
+export async function pickBinaryFile(accept = '.sbp,.sbpbackup,.cho,.chopro,.crd,.onsong,.pro,.txt,.zip'): Promise<{
   name: string;
   bytes: Uint8Array;
 } | null> {

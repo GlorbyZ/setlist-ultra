@@ -1,4 +1,5 @@
 import type { ChordSlot, Line, Section, SectionKind, SongDocument } from '../ast/types';
+import { classifySectionKind, sectionLabelFromText } from '../chart/sectionLabels';
 
 function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -10,16 +11,6 @@ const CHORD_TOKEN_RE =
   /[A-G][#b]?(?:maj7|maj|min|m|sus[24]?|dim|aug|add[0-9]|[0-9]|°|ø)*(?:\/[A-G][#b]?)?/g;
 const CHORD_TOKEN_FULL_RE =
   /^(?:[A-G][#b]?(?:maj7|maj|min|m|sus[24]?|dim|aug|add[0-9]|[0-9]|°|ø)*(?:\/[A-G][#b]?)?|N\.?C\.?|\||\/)$/i;
-
-function classifySection(label: string): SectionKind {
-  const n = label.toLowerCase();
-  if (n.includes('chorus') || n === 'ch' || n.startsWith('ch ')) return 'chorus';
-  if (n.includes('verse') || n === 'v' || n.startsWith('v ')) return 'verse';
-  if (n.includes('bridge')) return 'bridge';
-  if (n.includes('tab')) return 'tab';
-  if (n.includes('comment') || n === 'c') return 'comment';
-  return 'unknown';
-}
 
 export function isChordOnlyLine(line: string): boolean {
   const trimmed = line.trim();
@@ -183,13 +174,13 @@ export function parseChordPro(source: string): { document: SongDocument; meta: C
         continue;
       }
       if (name === 'c' || name === 'comment' || name === 'highlight' || name === 'ci') {
-        startSection(classifySection(value || 'Comment'), value || undefined);
+        startSection(classifySectionKind(value || 'Comment'), value || undefined);
         continue;
       }
       if (name === 'meta' && value) {
         continue;
       }
-      startSection(classifySection(value || name), value || name);
+      startSection(classifySectionKind(value || name), value || name);
       continue;
     }
 
@@ -206,6 +197,12 @@ export function parseChordPro(source: string): { document: SongDocument; meta: C
 
     if (!rawLine.trim()) {
       if (ctx.current) ctx.current.lines.push({ id: uid(), kind: 'blank' });
+      continue;
+    }
+
+    const ugHeader = sectionLabelFromText(rawLine);
+    if (ugHeader) {
+      startSection(classifySectionKind(ugHeader), ugHeader);
       continue;
     }
 

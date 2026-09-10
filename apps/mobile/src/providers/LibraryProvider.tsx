@@ -9,6 +9,7 @@ import {
   patchAppState,
   type LibraryScope,
 } from '@/src/lib/repository';
+import { workspaceIdForScope } from '@/src/lib/domain';
 import { seedDemoSongIfEmpty } from '@/src/lib/seed';
 import { isNativeDbDead, recoverDatabase } from '@/src/lib/db';
 
@@ -73,6 +74,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     await patchAppState({
       currentLibraryKind: next.libraryKind,
       currentOrgId: next.orgId ?? null,
+      currentWorkspaceId: workspaceIdForScope(next),
     });
     await refresh();
   }, [refresh]);

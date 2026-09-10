@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
-import { completeOAuthFromUrl } from '@/src/lib/hosted';
+import { completeOAuthFromUrl, isOAuthOwnedBySettings } from '@/src/lib/hosted';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 function buildUrlFromParams(params: Record<string, string | string[] | undefined>) {
@@ -29,20 +29,24 @@ export default function AuthCallbackScreen() {
   const started = useRef(false);
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-
+    const initialPromise = Linking.getInitialURL();
     void (async () => {
+      const initial = await initialPromise;
+      const fromParams = buildUrlFromParams(params as Record<string, string | string[] | undefined>);
+      const url = linkingUrl ?? initial ?? fromParams;
+      if (!url || !hasAuthPayload(url)) return;
+      if (started.current) return;
+      started.current = true;
+
       try {
-        const initial = await Linking.getInitialURL();
-        const fromParams = buildUrlFromParams(params as Record<string, string | string[] | undefined>);
-        const url = linkingUrl ?? initial ?? fromParams;
-        if (!url) {
-          throw new Error('No sign-in details found. Try again from Settings.');
-        }
         await completeOAuthFromUrl(url);
-        router.replace('/(tabs)/settings');
+        if (router.canGoBack()) router.back();
+        else router.replace('/(tabs)/settings');
       } catch (err) {
+        if (isOAuthOwnedBySettings() && router.canGoBack()) {
+          router.back();
+          return;
+        }
         setError(err instanceof Error ? err.message : 'Sign-in did not finish.');
       }
     })();
@@ -64,6 +68,10 @@ export default function AuthCallbackScreen() {
       )}
     </View>
   );
+}
+
+function hasAuthPayload(url: string) {
+  return /(?:^|[?&#])(?:code|access_token)=/.test(url);
 }
 
 function makeStyles(t: AppTheme) {

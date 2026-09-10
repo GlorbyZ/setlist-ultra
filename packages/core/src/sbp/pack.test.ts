@@ -114,6 +114,16 @@ test('backup pack round-trips hive bytes and song extras', () => {
   assert.equal(parsed.library.songs.length, 3);
 });
 
+test('pack round-trips folders', () => {
+  const bytes = packSbpArchive(
+    { ...FIXTURE, folders: [{ Id: 3, name: 'Worship' }] },
+    { kind: 'backup' },
+  );
+  const parsed = parseSbpArchive(bytes, 'backup');
+  assert.equal(parsed.library.folders[0]?.name, 'Worship');
+  assert.equal(parsed.library.folders[0]?.Id, 3);
+});
+
 test('chordpro parse inline chords, comments, and tab blocks', () => {
   const source = '{c: Intro}\n[G]Hello [C]world\n{sot}\ne|---2---|\n{eot}\n';
   const { document } = parseChordPro(source);

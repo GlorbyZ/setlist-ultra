@@ -1,4 +1,5 @@
-import type { ChordSlot, Line, SongDocument, UgLine, UgTabResponse } from '../ast/types';
+import type { ChordSlot, Line, Section, SongDocument, UgLine, UgTabResponse } from '../ast/types';
+import { classifySectionKind, sectionLabelFromText } from '../chart/sectionLabels';
 import { decodeHtmlEntities } from '../html/entities';
 
 function uid(): string {
@@ -32,7 +33,7 @@ function pairUgLines(lines: UgLine[]): Line[] {
     }
 
     const next = lines[i + 1];
-    if (next?.type === 'lyric') {
+    if (next?.type === 'lyric' && !sectionLabelFromText(next.lyric)) {
       result.push({
         id: uid(),
         kind: 'paired',
@@ -54,6 +55,35 @@ function pairUgLines(lines: UgLine[]): Line[] {
   return result;
 }
 
+function sectionsFromPairedLines(lines: Line[]): Section[] {
+  const sections: Section[] = [];
+  let current: Section | null = null;
+
+  const start = (label?: string): Section => {
+    const next: Section = {
+      id: uid(),
+      kind: label ? classifySectionKind(label) : 'unknown',
+      label,
+      lines: [],
+    };
+    current = next;
+    sections.push(next);
+    return next;
+  };
+
+  for (const line of lines) {
+    const header =
+      line.kind === 'lyric_only' && !line.slots?.length ? sectionLabelFromText(line.lyric) : null;
+    if (header) {
+      start(header);
+      continue;
+    }
+    (current ?? start()).lines.push(line);
+  }
+
+  return sections.length ? sections : [{ id: uid(), kind: 'unknown', lines: [] }];
+}
+
 export function normalizeUgTab(response: UgTabResponse, sourceUrl?: string): {
   document: SongDocument;
   meta: {
@@ -69,13 +99,7 @@ export function normalizeUgTab(response: UgTabResponse, sourceUrl?: string): {
 
   const document: SongDocument = {
     version: 1,
-    sections: [
-      {
-        id: uid(),
-        kind: 'unknown',
-        lines,
-      },
-    ],
+    sections: sectionsFromPairedLines(lines),
     source: {
       provider: 'ultimate_guitar',
       url: sourceUrl,

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,10 +20,15 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
 import {
   createBlankSong,
+  getLastCompletedImport,
   importAnyChartFile,
   insertLibrarySong,
+  listResumableImports,
   saveSongFromUg,
+  undoImportJob,
+  type ImportProgressEvent,
 } from '@/src/lib/repository';
+import { ImportOverlay } from '@/src/components/ImportOverlay';
 import { importUgTab, type UgSongGroup } from '@/src/lib/ug-api';
 import { config } from '@/src/lib/config';
 import { pickBinaryFile, pickImage } from '@/src/lib/files';
@@ -44,6 +49,19 @@ export default function ImportScreen() {
   const [title, setTitle] = useState('Untitled');
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
+  const [importProgress, setImportProgress] = useState<ImportProgressEvent | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importFinished, setImportFinished] = useState(false);
+  const [pausedHint, setPausedHint] = useState<string | null>(null);
+  const importAbort = useRef<AbortController | null>(null);
+  const importJobId = useRef<string | null>(null);
+
+  useEffect(() => {
+    void listResumableImports().then((jobs) => {
+      const job = jobs[0];
+      if (job) setPausedHint(job.filename ? `Paused: ${job.filename}` : 'A previous import can be resumed.');
+    });
+  }, []);
 
   // Same online engine as Songs tab search (debounce, group/rank, load-more, hide Official).
   const online = useUgOnlineSearch(query, { enabled: tab === 'online', clearWhenDisabled: false });
@@ -88,22 +106,54 @@ export default function ImportScreen() {
   };
 
   const importFile = async () => {
+    const picked = await pickBinaryFile();
+    if (!picked) return;
+    const controller = new AbortController();
+    importAbort.current = controller;
     setBusy(true);
+    setImportError(null);
+    setImportFinished(false);
+    setImportProgress({
+      phase: 'songs',
+      totalSongs: 0,
+      processedSongs: 0,
+      created: 0,
+      reused: 0,
+      variants: 0,
+      skipped: 0,
+      failed: 0,
+    });
     try {
-      const picked = await pickBinaryFile();
-      if (!picked) return;
-      const result = await importAnyChartFile(picked.bytes, picked.name);
+      const result = await importAnyChartFile(picked.bytes, picked.name, {
+        signal: controller.signal,
+        onProgress: (event) => {
+          if (event.jobId) importJobId.current = event.jobId;
+          setImportProgress(event);
+        },
+      });
       await refresh();
       if (result.kind === 'song' && result.songId) {
+        setImportProgress(null);
         await afterImport(result.songId);
         return;
       }
-      setDialog({ title: 'Imported', body: `${result.songs} songs, ${result.sets} sets` });
-      router.back();
+      setImportFinished(true);
+      setPausedHint(null);
     } catch (error) {
-      setDialog({ title: 'Import failed', body: error instanceof Error ? error.message : 'Unknown error' });
+      const cancelled = error instanceof Error && error.name === 'AbortError';
+      if (cancelled) {
+        setImportProgress(null);
+        setPausedHint('Import paused. Choose the same file again to resume.');
+        setDialog({
+          title: 'Import paused',
+          body: 'Stopped at a checkpoint. Songs already read stay staged until you resume or undo.',
+        });
+        return;
+      }
+      setImportError(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setBusy(false);
+      importAbort.current = null;
     }
   };
 
@@ -169,7 +219,27 @@ export default function ImportScreen() {
       {tab === 'file' ? (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>.sbp / .sbpbackup / ChordPro</Text>
-          <BrandButton label="Choose file" onPress={() => void importFile()} busy={busy} />
+          <BrandButton label="Choose file" onPress={() => void importFile()} disabled={busy} busy={busy && !importProgress} />
+          {pausedHint ? <Text style={styles.progressBody}>{pausedHint}</Text> : null}
+          <Pressable
+            style={styles.ghost}
+            onPress={() =>
+              void (async () => {
+                const last = await getLastCompletedImport();
+                if (!last) {
+                  setDialog({ title: 'Nothing to undo', body: 'No completed import on this device.' });
+                  return;
+                }
+                const result = await undoImportJob(last.id);
+                await refresh();
+                setDialog({
+                  title: 'Import undone',
+                  body: `Removed ${result.removedSongs} songs and ${result.removedSets} sets from that import.`,
+                });
+              })()
+            }>
+            <Text style={styles.ghostText}>Undo last import</Text>
+          </Pressable>
           <Pressable style={styles.ghost} onPress={() => void createNew()}>
             <Text style={styles.ghostText}>Create empty song</Text>
           </Pressable>
@@ -295,6 +365,33 @@ export default function ImportScreen() {
         }}
       />
 
+      <ImportOverlay
+        visible={Boolean(importProgress)}
+        progress={importProgress}
+        error={importError}
+        finished={importFinished}
+        onCancel={() => importAbort.current?.abort()}
+        onDone={() => {
+          setImportProgress(null);
+          setImportError(null);
+          setImportFinished(false);
+          if (!importError) router.back();
+        }}
+        onUndo={
+          importJobId.current
+            ? () =>
+                void (async () => {
+                  const id = importJobId.current;
+                  if (!id) return;
+                  await undoImportJob(id);
+                  await refresh();
+                  setImportProgress(null);
+                  setImportFinished(false);
+                  setDialog({ title: 'Import undone', body: 'Songs and sets from that file were removed.' });
+                })()
+            : undefined
+        }
+      />
       <BrandDialog
         visible={Boolean(dialog)}
         title={dialog?.title ?? ''}
@@ -358,5 +455,17 @@ function makeStyles(t: AppTheme) {
     },
     resultTitle: { color: t.text, fontWeight: '700' as const },
     resultUrl: { color: t.faint, marginTop: 4, fontSize: 12 },
+    progress: {
+      backgroundColor: t.panel,
+      borderRadius: t.radius.md,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 14,
+      marginBottom: 12,
+      gap: 8,
+      alignItems: 'center' as const,
+    },
+    progressTitle: { color: t.text, fontWeight: '700' as const },
+    progressBody: { color: t.muted, fontSize: 13, textAlign: 'center' as const },
   };
 }

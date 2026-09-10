@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { groupUgResults, mergeUgHits, parseUgTabUrl, sortUgVersions } from './ug-group';
+import { groupUgResults, appendUgGroups, mergeUgHits, parseUgTabUrl, sortUgVersions } from './ug-group';
 
 test('groupUgResults splits songs by name not a shared songId', () => {
   const groups = groupUgResults([
@@ -63,6 +63,20 @@ test('mergeUgHits appends unique urls without collapsing artists', () => {
   const groups = groupUgResults(merged);
   assert.equal(merged.length, 2);
   assert.equal(groups.length, 2);
+});
+
+test('appendUgGroups keeps listed songs in place and adds new ones below', () => {
+  const first = groupUgResults([
+    { title: 'Stay — The Kid LAROI', url: 'https://tabs.ultimate-guitar.com/tab/the-kid-laroi/stay-chords-2', rating: 4.9 },
+    { title: 'Stay — Rihanna', url: 'https://tabs.ultimate-guitar.com/tab/rihanna/stay-chords-1', rating: 4.2 },
+  ]);
+  assert.equal(first[0]?.artistName, 'The Kid LAROI');
+  const next = appendUgGroups(first, [
+    { title: 'Hello — Adele', url: 'https://tabs.ultimate-guitar.com/tab/adele/hello-chords-9', rating: 5 },
+    { title: 'Stay — Rihanna', url: 'https://tabs.ultimate-guitar.com/tab/rihanna/stay-chords-8', rating: 4.1 },
+  ]);
+  assert.equal(next.map((group) => group.artistName).join(','), 'The Kid LAROI,Rihanna,Adele');
+  assert.equal(next[1]?.versions.length, 2);
 });
 
 test('sortUgVersions puts chords before video', () => {

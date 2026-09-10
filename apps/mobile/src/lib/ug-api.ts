@@ -3,7 +3,7 @@ import { config } from './config';
 import { groupUgResults, type UgSearchHit, type UgSongGroup } from './ug-group';
 
 export type { UgSearchHit, UgSongGroup } from './ug-group';
-export { groupUgResults, mergeUgHits, parseUgTabUrl, rankUgGroups, sortUgVersions, isOfficialUgType } from './ug-group';
+export { groupUgResults, appendUgGroups, mergeUgHits, parseUgTabUrl, rankUgGroups, sortUgVersions, isOfficialUgType } from './ug-group';
 
 export type UgSearchResult = UgSearchHit;
 

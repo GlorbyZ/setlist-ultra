@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AntDesign } from '@expo/vector-icons';
+import { EMPTY_SYNC_PROGRESS, type SyncProgressEvent } from '@setlist-ultra/core';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
 import { AiSettingsPanel } from '@/src/components/AiSettingsPanel';
+import { SyncOverlay } from '@/src/components/SyncOverlay';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { isHostedConfigured } from '@/src/lib/config';
 import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes } from '@/src/lib/repository';
@@ -35,6 +37,20 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(hosted ? 'Local library' : 'Cloud sync is off. Using this device only.');
   const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
+  const [syncUi, setSyncUi] = useState<{
+    visible: boolean;
+    headline: string;
+    progress: SyncProgressEvent;
+    error: string | null;
+    finished: boolean;
+  }>({
+    visible: false,
+    headline: 'Syncing library',
+    progress: EMPTY_SYNC_PROGRESS,
+    error: null,
+    finished: false,
+  });
+  const inFlight = useRef(false);
 
   useEffect(() => {
     if (!hosted) return;
@@ -45,13 +61,44 @@ export default function SettingsScreen() {
   }, [hosted]);
 
   const run = async (fn: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       await fn();
     } catch (error) {
       setDialog({ title: 'Could not finish', body: errorMessage(error) });
     } finally {
+      inFlight.current = false;
       setBusy(false);
+    }
+  };
+
+  const closeSyncUi = () => {
+    setSyncUi((current) => ({ ...current, visible: false, error: null, finished: false }));
+  };
+
+  const syncLibrary = async (headline: string) => {
+    setSyncUi({
+      visible: true,
+      headline,
+      progress: { ...EMPTY_SYNC_PROGRESS, phase: 'session' },
+      error: null,
+      finished: false,
+    });
+    try {
+      await syncPersonalLibrary((event) => {
+        setSyncUi((current) => ({ ...current, progress: event, headline: 'Syncing library' }));
+      });
+      await refresh();
+      setStatus('Catalog + library synced');
+      setSyncUi((current) => ({ ...current, finished: true, headline: 'Syncing library' }));
+    } catch (error) {
+      setSyncUi((current) => ({
+        ...current,
+        error: errorMessage(error),
+        finished: false,
+      }));
     }
   };
 
@@ -115,9 +162,22 @@ export default function SettingsScreen() {
                 busy={busy}
                 onPress={() =>
                   void run(async () => {
-                    await hostedSignIn(email.trim(), password);
+                    setSyncUi({
+                      visible: true,
+                      headline: 'Signing in',
+                      progress: { ...EMPTY_SYNC_PROGRESS, phase: 'session' },
+                      error: null,
+                      finished: false,
+                    });
+                    try {
+                      await hostedSignIn(email.trim(), password);
+                    } catch (error) {
+                      setSyncUi((current) => ({ ...current, error: errorMessage(error) }));
+                      return;
+                    }
                     setSessionEmail(email.trim());
                     setStatus(`Signed in as ${email.trim()}`);
+                    await syncLibrary('Syncing library');
                   })
                 }
               />
@@ -137,14 +197,27 @@ export default function SettingsScreen() {
                   label="Continue with Google"
                   busy={busy}
                   icon={<AntDesign name="google" size={18} color={theme.accentText} />}
-                  onPress={() =>
-                    void run(async () => {
-                      const user = await hostedSignInWithGoogle();
-                      const signed = user.email ?? 'Google account';
-                      setSessionEmail(signed);
-                      setStatus(`Signed in as ${signed}`);
-                    })
-                  }
+                    onPress={() =>
+                      void run(async () => {
+                        setSyncUi({
+                          visible: true,
+                          headline: 'Signing in',
+                          progress: { ...EMPTY_SYNC_PROGRESS, phase: 'session' },
+                          error: null,
+                          finished: false,
+                        });
+                        try {
+                          const user = await hostedSignInWithGoogle();
+                          const signed = user.email ?? 'Google account';
+                          setSessionEmail(signed);
+                          setStatus(`Signed in as ${signed}`);
+                        } catch (error) {
+                          setSyncUi((current) => ({ ...current, error: errorMessage(error) }));
+                          return;
+                        }
+                        await syncLibrary('Syncing library');
+                      })
+                    }
                 />
               ) : null}
             </View>
@@ -155,9 +228,7 @@ export default function SettingsScreen() {
             busy={busy}
             onPress={() =>
               void run(async () => {
-                await syncPersonalLibrary();
-                await refresh();
-                setStatus('Catalog + library synced');
+                await syncLibrary('Syncing library');
               })
             }
           />
@@ -170,6 +241,7 @@ export default function SettingsScreen() {
       )}
 
       <Text style={styles.heading}>Library</Text>
+      <Text style={styles.body}>Exact-content duplicate songs only. Different arrangements stay in the library.</Text>
       <Pressable
         style={styles.secondary}
         disabled={busy}
@@ -181,13 +253,14 @@ export default function SettingsScreen() {
               title: 'Duplicates cleaned',
               body:
                 result.removed === 0
-                  ? 'No duplicate songs found.'
+                  ? 'No exact-content duplicate songs found.'
                   : `Merged ${result.mergedGroups} group(s) and removed ${result.removed} duplicate song(s). Setlists were updated.`,
             });
           })
         }>
-        <Text style={styles.secondaryText}>Clean duplicates</Text>
+        <Text style={styles.secondaryText}>Clean duplicate songs</Text>
       </Pressable>
+      <Text style={styles.body}>Removes setlists that have the same title and the same songs in the same order.</Text>
       <Pressable
         style={styles.secondary}
         disabled={busy}
@@ -199,7 +272,7 @@ export default function SettingsScreen() {
               title: 'Duplicate sets cleaned',
               body:
                 result.removed === 0
-                  ? 'No duplicate setlists found.'
+                  ? 'No exact-clone setlists found.'
                   : `Removed ${result.removed} duplicate setlist(s). Songs stay in your library.`,
             });
           })
@@ -225,6 +298,14 @@ export default function SettingsScreen() {
         <Text style={styles.cardBody}>This device: {Platform.OS}</Text>
       </View>
 
+      <SyncOverlay
+        visible={syncUi.visible}
+        headline={syncUi.headline}
+        progress={syncUi.progress}
+        error={syncUi.error}
+        finished={syncUi.finished}
+        onDone={closeSyncUi}
+      />
       <BrandDialog
         visible={Boolean(dialog)}
         title={dialog?.title ?? ''}

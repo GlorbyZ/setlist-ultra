@@ -6,7 +6,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/sbp/pack.test.ts src/chordpro/parse.test.ts src/chord/transpose.test.ts src/html/entities.test.ts src/ug/match.test.ts src/chart/jumpTargets.test.ts"
+    "test": "tsx --test src/sbp/pack.test.ts src/chordpro/parse.test.ts src/chord/transpose.test.ts src/html/entities.test.ts src/ug/match.test.ts src/chart/jumpTargets.test.ts src/identity/canonicalMap.test.ts src/identity/setlistClone.test.ts src/identity/chartMatch.test.ts src/domain/musicalFields.test.ts src/domain/syncPolicy.test.ts src/domain/syncProgress.test.ts src/import/detect.test.ts"
   },
   "dependencies": {
     "@tonaljs/tonal": "^4.10.0",

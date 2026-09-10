@@ -22,6 +22,8 @@ export const folders = sqliteTable('folders', {
   libraryKind: text('library_kind').notNull().default('personal'),
   orgId: text('org_id'),
   extras: text('extras'),
+  workspaceId: text('workspace_id'),
+  importJobId: text('import_job_id'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -66,11 +68,16 @@ export const songs = sqliteTable('songs', {
   contentKind: text('content_kind').notNull().default('chordpro'),
   sourceProvider: text('source_provider'),
   sourceUrl: text('source_url'),
+  sourceExternalId: text('source_external_id'),
   contentAst: text('content_ast').notNull(),
   chordpro: text('chordpro').notNull().default(''),
   contentHash: text('content_hash'),
   folderId: text('folder_id'),
   mediaUri: text('media_uri'),
+  workspaceId: text('workspace_id'),
+  revisionId: text('revision_id'),
+  localRevision: integer('local_revision').notNull().default(1),
+  importJobId: text('import_job_id'),
   deleted: integer('deleted').notNull().default(0),
   extras: text('extras'),
   syncStatus: text('sync_status').notNull().default('local'),
@@ -94,6 +101,9 @@ export const setlists = sqliteTable('setlists', {
   extras: text('extras'),
   syncStatus: text('sync_status').notNull().default('local'),
   cloudPath: text('cloud_path'),
+  workspaceId: text('workspace_id'),
+  localRevision: integer('local_revision').notNull().default(1),
+  importJobId: text('import_job_id'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -148,6 +158,7 @@ export const appState = sqliteTable('app_state', {
   id: text('id').primaryKey().default('default'),
   currentLibraryKind: text('current_library_kind').notNull().default('personal'),
   currentOrgId: text('current_org_id'),
+  currentWorkspaceId: text('current_workspace_id'),
   currentSongId: text('current_song_id'),
   currentSetlistId: text('current_setlist_id'),
   currentSetIndex: integer('current_set_index').default(0),
@@ -169,6 +180,82 @@ export const syncState = sqliteTable('sync_state', {
   lastSyncAt: text('last_sync_at'),
 });
 
+/** Guest / personal / band data boundary. Account identity is separate. */
+export const workspaces = sqliteTable('workspaces', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  orgId: text('org_id'),
+  accountId: text('account_id'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const workspaceMembers = sqliteTable('workspace_members', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').notNull(),
+  accountId: text('account_id'),
+  email: text('email'),
+  role: text('role').notNull().default('member'),
+  createdAt: text('created_at').notNull(),
+});
+
+/** Immutable chart content for an arrangement. New edits insert a row; they do not overwrite. */
+export const chartRevisions = sqliteTable('chart_revisions', {
+  id: text('id').primaryKey(),
+  arrangementId: text('arrangement_id').notNull(),
+  chartId: text('chart_id'),
+  contentHash: text('content_hash'),
+  chordpro: text('chordpro').notNull().default(''),
+  ast: text('ast'),
+  parentRevisionId: text('parent_revision_id'),
+  schemaVersion: integer('schema_version').notNull().default(1),
+  createdAt: text('created_at').notNull(),
+});
+
+export const outboxOperations = sqliteTable('outbox_operations', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').notNull(),
+  entityId: text('entity_id').notNull(),
+  entityType: text('entity_type').notNull(),
+  operationType: text('operation_type').notNull(),
+  expectedServerRevision: integer('expected_server_revision'),
+  localRevision: integer('local_revision').notNull().default(1),
+  schemaVersion: integer('schema_version').notNull().default(1),
+  payload: text('payload'),
+  status: text('status').notNull().default('pending'),
+  retryCount: integer('retry_count').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+});
+
+export const syncCheckpoints = sqliteTable('sync_checkpoints', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id'),
+  workspaceId: text('workspace_id').notNull(),
+  cursor: text('cursor'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const importJobs = sqliteTable('import_jobs', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').notNull(),
+  filename: text('filename'),
+  format: text('format').notNull(),
+  archiveHash: text('archive_hash'),
+  status: text('status').notNull().default('running'),
+  checkpointJson: text('checkpoint_json'),
+  createdIdsJson: text('created_ids_json'),
+  reportJson: text('report_json'),
+  errorText: text('error_text'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const schemaMigrations = sqliteTable('schema_migrations', {
+  version: integer('version').primaryKey(),
+  appliedAt: text('applied_at').notNull(),
+});
+
 export type ChartRow = typeof charts.$inferSelect;
 export type SongRow = typeof songs.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
@@ -177,3 +264,7 @@ export type SetlistItemRow = typeof setlistItems.$inferSelect;
 export type OrgRow = typeof orgs.$inferSelect;
 export type AccountRow = typeof accounts.$inferSelect;
 export type AppStateRow = typeof appState.$inferSelect;
+export type WorkspaceRow = typeof workspaces.$inferSelect;
+export type ChartRevisionRow = typeof chartRevisions.$inferSelect;
+export type OutboxOperationRow = typeof outboxOperations.$inferSelect;
+export type ImportJobRow = typeof importJobs.$inferSelect;

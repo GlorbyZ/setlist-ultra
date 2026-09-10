@@ -51,3 +51,32 @@ test('UG pre_spaces is an absolute column, not a gap', () => {
   assert.equal(line?.slots?.[0]?.at, 0);
   assert.equal(line?.slots?.[1]?.at, 11);
 });
+
+test('UG [Verse] headers become labeled sections, [G] stays a chord', () => {
+  const { document } = normalizeUgTab({
+    tab: {
+      title: 'Test',
+      artist_name: 'Band',
+      lines: [
+        { type: 'lyric', lyric: '[Intro]' },
+        { type: 'chords', chords: [{ note: 'G', pre_spaces: 0 }] },
+        { type: 'lyric', lyric: '[Verse 1]' },
+        { type: 'chords', chords: [{ note: 'C', pre_spaces: 0 }] },
+        { type: 'lyric', lyric: 'Hello' },
+      ],
+    },
+  });
+  assert.equal(document.sections.map((section) => section.label).join(','), 'Intro,Verse 1');
+  assert.equal(document.sections[1]?.kind, 'verse');
+  const hello = document.sections[1]?.lines.find((row) => row.kind === 'paired');
+  assert.equal(hello?.lyric, 'Hello');
+  assert.equal(hello?.slots?.[0]?.chord, 'C');
+});
+
+test('a lone [G] line is a chord, not a section title', () => {
+  const { document } = parseChordPro('[G]\nHello\n');
+  assert.equal(document.sections.length, 1);
+  assert.equal(document.sections[0]?.kind, 'unknown');
+  const line = document.sections[0]?.lines.find((row) => row.kind === 'paired' || row.kind === 'chord_only');
+  assert.equal(line?.slots?.[0]?.chord, 'G');
+});

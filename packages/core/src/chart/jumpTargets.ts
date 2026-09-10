@@ -1,4 +1,5 @@
 import type { Line, SongDocument } from '../ast/types';
+import { sectionLabelFromText } from './sectionLabels';
 
 export type ChartJumpTarget = {
   id: string;
@@ -7,15 +8,22 @@ export type ChartJumpTarget = {
   sectionId: string;
 };
 
-const HEADER_RE =
-  /^(verse|chorus|bridge|intro|outro|solo|pre[- ]?chorus|tag|instrumental|interlude|ending|coda|vamp|break|refrain|hook)\b/i;
-
 function isHeaderLyric(line: Line): boolean {
-  const text = line.lyric?.trim() ?? '';
-  if (!text || text.length > 40) return false;
-  if (line.slots && line.slots.length > 0) return false;
   if (line.kind === 'comment') return true;
-  return HEADER_RE.test(text);
+  if (line.slots && line.slots.length > 0) {
+    if (line.kind === 'chord_only' && line.slots.length === 1) {
+      return Boolean(sectionLabelFromText(line.slots[0]?.chord));
+    }
+    return false;
+  }
+  return Boolean(sectionLabelFromText(line.lyric));
+}
+
+function headerLabel(line: Line): string {
+  if (line.kind === 'chord_only' && line.slots?.length === 1) {
+    return sectionLabelFromText(line.slots[0]?.chord) || line.slots[0]?.chord || 'Section';
+  }
+  return sectionLabelFromText(line.lyric) || line.lyric?.trim() || 'Section';
 }
 
 function sectionHasBody(section: SongDocument['sections'][number]): boolean {
@@ -46,7 +54,7 @@ export function chartJumpTargets(document: SongDocument): ChartJumpTarget[] {
         id: line.id,
         sectionId: section.id,
         kind: 'line',
-        label: line.lyric?.trim() || 'Section',
+        label: headerLabel(line),
       });
     }
   }

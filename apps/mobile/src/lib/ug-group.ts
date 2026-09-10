@@ -98,7 +98,7 @@ export function rankUgGroups(groups: UgSongGroup[]): UgSongGroup[] {
   });
 }
 
-export function groupUgResults(hits: UgSearchHit[]): UgSongGroup[] {
+function collectUgGroups(hits: UgSearchHit[]): UgSongGroup[] {
   const map = new Map<string, UgSongGroup>();
   for (const hit of hits) {
     if (isOfficialUgType(hit.type)) continue;
@@ -124,18 +124,43 @@ export function groupUgResults(hits: UgSearchHit[]): UgSongGroup[] {
       map.set(id, { id, songName, artistName, versions: [version] });
     }
   }
-  return rankUgGroups(
-    [...map.values()].map((group) => {
-      const versions = sortUgVersions(group.versions);
-      const { rating, popularity } = groupScore({ ...group, versions });
-      return {
-        ...group,
-        versions,
-        rating: rating || undefined,
-        popularity: popularity || undefined,
-      };
-    }),
-  );
+  return [...map.values()].map((group) => {
+    const versions = sortUgVersions(group.versions);
+    const { rating, popularity } = groupScore({ ...group, versions });
+    return {
+      ...group,
+      versions,
+      rating: rating || undefined,
+      popularity: popularity || undefined,
+    };
+  });
+}
+
+export function groupUgResults(hits: UgSearchHit[]): UgSongGroup[] {
+  return rankUgGroups(collectUgGroups(hits));
+}
+
+/** Merge extra hits into existing rows in place; new songs go after what is already listed. */
+export function appendUgGroups(existing: UgSongGroup[], incomingHits: UgSearchHit[]): UgSongGroup[] {
+  const incoming = collectUgGroups(incomingHits);
+  const seen = new Set(existing.map((group) => group.id));
+  const extras = new Map(incoming.map((group) => [group.id, group]));
+  const merged = existing.map((group) => {
+    const extra = extras.get(group.id);
+    if (!extra) return group;
+    const versions = sortUgVersions([
+      ...group.versions,
+      ...extra.versions.filter((row) => !group.versions.some((have) => have.url === row.url)),
+    ]);
+    const { rating, popularity } = groupScore({ ...group, versions });
+    return {
+      ...group,
+      versions,
+      rating: rating || undefined,
+      popularity: popularity || undefined,
+    };
+  });
+  return [...merged, ...incoming.filter((group) => !seen.has(group.id))];
 }
 
 export function mergeUgHits(existing: UgSearchHit[], incoming: UgSearchHit[]): UgSearchHit[] {

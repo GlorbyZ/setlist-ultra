@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  appendUgGroups,
   groupUgResults,
   mergeUgHits,
   searchUgTabs,
@@ -50,6 +51,7 @@ export function useUgOnlineSearch(query: string, opts?: UseUgOnlineSearchOptions
   const clearWhenDisabled = opts?.clearWhenDisabled ?? true;
 
   const [hits, setHits] = useState<UgSearchHit[]>([]);
+  const [groups, setGroups] = useState<UgSongGroup[]>([]);
   const [nextPage, setNextPage] = useState<number | null>(null);
   const [status, setStatus] = useState<UgOnlineStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -58,11 +60,10 @@ export function useUgOnlineSearch(query: string, opts?: UseUgOnlineSearchOptions
   const queryRef = useRef(query);
   queryRef.current = query;
 
-  const groups = useMemo(() => groupUgResults(hits), [hits]);
-
   const reset = useCallback(() => {
     genRef.current += 1;
     setHits([]);
+    setGroups([]);
     setNextPage(null);
     setStatus('idle');
     setError(null);
@@ -84,6 +85,9 @@ export function useUgOnlineSearch(query: string, opts?: UseUgOnlineSearchOptions
       const result = await searchUgTabs(term, { page, pageSize: UG_PAGE_SIZE });
       if (gen !== genRef.current) return;
       setHits((prev) => (page === 1 && !append ? result.hits : mergeUgHits(prev, result.hits)));
+      setGroups((prev) =>
+        page === 1 && !append ? groupUgResults(result.hits) : appendUgGroups(prev, result.hits),
+      );
       setNextPage(result.nextPage);
       setStatus(result.groups.length || result.hits.length ? 'ready' : 'empty');
     } catch (err) {
@@ -123,6 +127,7 @@ export function useUgOnlineSearch(query: string, opts?: UseUgOnlineSearchOptions
       if (clearWhenDisabled) {
         genRef.current += 1;
         setHits([]);
+        setGroups([]);
         setNextPage(null);
         setStatus('idle');
         setError(null);
