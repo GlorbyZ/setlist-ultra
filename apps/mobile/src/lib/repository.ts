@@ -3,6 +3,7 @@ import {
   createEmptyDocument,
   documentToChordPro,
   fingerprintContent,
+  foldUgName,
   keyNameToSbp,
   normalizeUgTab,
   parseChordPro,
@@ -28,6 +29,8 @@ import {
   syncState,
   type SongRow,
 } from '@setlist-ultra/db';
+import { DEFAULT_AUTOSCROLL_SECONDS, resolveAutoscrollSeconds } from './autoscroll';
+export { DEFAULT_AUTOSCROLL_SECONDS, resolveAutoscrollSeconds } from './autoscroll';
 import { getDatabase } from './db';
 
 export function newId(): string {
@@ -82,6 +85,97 @@ export async function getLibraryScope(): Promise<LibraryScope> {
     libraryKind: state.currentLibraryKind === 'org' ? 'org' : 'personal',
     orgId: state.currentOrgId,
   };
+}
+
+
+export function normalizeLibraryKey(title: string, artist?: string | null): string {
+  return `${foldUgName(title || '')}|${foldUgName(artist || '')}`;
+}
+
+export async function findSongByContentHash(contentHash: string, scope?: LibraryScope) {
+  if (!contentHash) return null;
+  const db = await getDatabase();
+  const s = scope ?? (await getLibraryScope());
+  const rows = await db
+    .select()
+    .from(songs)
+    .where(and(scopeFilter(s), eq(songs.contentHash, contentHash)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findSongBySourceId(
+  provider: string,
+  externalId: string,
+  scope?: LibraryScope,
+) {
+  if (!provider || !externalId) return null;
+  const rows = await listSongs(scope);
+  return (
+    rows.find(
+      (row) =>
+        (row.sourceProvider === provider && (row.sourceUrl === externalId || row.webUrl === externalId)) ||
+        (row.sourceProvider === provider && row.webUrl?.includes(externalId)),
+    ) ?? null
+  );
+}
+
+export async function findSongByTitleArtist(title: string, artist?: string | null, scope?: LibraryScope) {
+  const key = normalizeLibraryKey(title, artist);
+  if (!key || key === '|') return null;
+  const rows = await listSongs(scope);
+  return rows.find((row) => normalizeLibraryKey(row.title, row.artist) === key) ?? null;
+}
+
+/** Merge duplicate library songs: rewrite setlist songIds, soft-delete extras. */
+export async function cleanDuplicateSongs(scope?: LibraryScope) {
+  const s = scope ?? (await getLibraryScope());
+  const rows = await listSongs(s);
+  const db = await getDatabase();
+  const dupeToCanonical = new Map<string, string>();
+
+  const byHash = new Map<string, SongRow[]>();
+  for (const row of rows) {
+    const hash = row.contentHash || fingerprintContent(row.chordpro ?? '');
+    if (!hash) continue;
+    const list = byHash.get(hash) ?? [];
+    list.push(row);
+    byHash.set(hash, list);
+  }
+  for (const group of byHash.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const canonical = sorted[0];
+    for (const dupe of sorted.slice(1)) dupeToCanonical.set(dupe.id, canonical.id);
+  }
+
+  const remaining = rows.filter((row) => !dupeToCanonical.has(row.id));
+  const bySoft = new Map<string, SongRow[]>();
+  for (const row of remaining) {
+    const key = normalizeLibraryKey(row.title, row.artist);
+    if (!key || key === '|') continue;
+    const list = bySoft.get(key) ?? [];
+    list.push(row);
+    bySoft.set(key, list);
+  }
+  for (const group of bySoft.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => {
+      const len = (b.chordpro?.length ?? 0) - (a.chordpro?.length ?? 0);
+      if (len) return len;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+    const canonical = sorted[0];
+    for (const dupe of sorted.slice(1)) dupeToCanonical.set(dupe.id, canonical.id);
+  }
+
+  let removed = 0;
+  for (const [dupeId, canonicalId] of dupeToCanonical) {
+    await db.update(setlistItems).set({ songId: canonicalId }).where(eq(setlistItems.songId, dupeId));
+    await db.update(songs).set({ deleted: 1, updatedAt: now() }).where(eq(songs.id, dupeId));
+    removed += 1;
+  }
+  return { mergedGroups: dupeToCanonical.size ? new Set(dupeToCanonical.values()).size : 0, removed };
 }
 
 export async function listSongs(scope?: LibraryScope) {
@@ -218,6 +312,7 @@ export async function saveSongFromUg(
     importSource: 'web:ultimate-guitar.com',
     sourceExternalId: ugId,
     scope,
+    softDedupe: false,
   });
 }
 
@@ -247,12 +342,40 @@ export async function insertLibrarySong(input: {
   contentKind?: string;
   mediaUri?: string;
   scope?: LibraryScope;
+  /** Soft title+artist reuse (default on for set/archive). Hard hash always reuses. */
+  softDedupe?: boolean;
 }): Promise<string> {
   const db = await getDatabase();
   const scope = input.scope ?? (await getLibraryScope());
   const document = input.document ?? parseChordPro(input.chordpro).document;
   const ast = JSON.stringify(document);
   const contentHash = input.sbp?.hash || fingerprintContent(input.chordpro);
+
+  // Hard match: never insert a second library song for the same chart.
+  const hard = await findSongByContentHash(contentHash, scope);
+  if (hard) return hard.id;
+
+  const sourceProvider =
+    input.sourceProvider ??
+    (input.sbp?.importSource?.includes('ultimate-guitar')
+      ? 'ultimate_guitar'
+      : input.sbp?.importSource?.includes('e-chords')
+        ? 'e_chords'
+        : null);
+  const sourceExternalId =
+    input.sourceExternalId ?? (typeof input.sbp?.Url === 'string' ? input.sbp.Url : null);
+  if (sourceProvider && sourceExternalId) {
+    const bySource = await findSongBySourceId(sourceProvider, sourceExternalId, scope);
+    if (bySource) return bySource.id;
+  }
+
+  // Soft match: reuse canonical when importing sets / backups (default on).
+  const softDedupe = input.softDedupe !== false;
+  if (softDedupe) {
+    const soft = await findSongByTitleArtist(input.title, input.artist ?? input.sbp?.author, scope);
+    if (soft) return soft.id;
+  }
+
   const chartId = await findOrCreateChart({
     chordpro: input.chordpro,
     ast,
@@ -294,7 +417,7 @@ export async function insertLibrarySong(input: {
     keyShift: sbp?.KeyShift ?? 0,
     capo: input.capo ?? sbp?.Capo ?? 0,
     tempo: input.tempo ?? sbp?.TempoInt ?? null,
-    durationSeconds: input.durationSeconds ?? sbp?.Duration ?? 90,
+    durationSeconds: input.durationSeconds ?? sbp?.Duration ?? DEFAULT_AUTOSCROLL_SECONDS,
     duration2: input.duration2 ?? sbp?.Duration2 ?? null,
     copyright: sbp?.Copyright ?? null,
     notesText: sbp?.NotesText ?? null,
@@ -338,6 +461,7 @@ export async function createBlankSong(title = 'Untitled', scope?: LibraryScope) 
     importSource: 'editor',
     sourceProvider: 'manual',
     scope,
+    softDedupe: false,
   });
 }
 

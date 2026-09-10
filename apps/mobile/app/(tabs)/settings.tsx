@@ -4,8 +4,9 @@ import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
+import { useLibrary } from '@/src/providers/LibraryProvider';
 import { config, isHostedConfigured } from '@/src/lib/config';
-import { exportSbpBytes } from '@/src/lib/repository';
+import { cleanDuplicateSongs, exportSbpBytes } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
 import {
   hostedSessionEmail,
@@ -19,6 +20,7 @@ import { THEME_OPTIONS, useTheme, useThemedStyles, type AppTheme, type ThemeId }
 
 export default function SettingsScreen() {
   const { theme, themeId, setThemeId } = useTheme();
+  const { refresh } = useLibrary();
   const styles = useThemedStyles(makeStyles);
   const hosted = isHostedConfigured();
   const [email, setEmail] = useState('');
@@ -148,6 +150,26 @@ export default function SettingsScreen() {
           </Text>
         </View>
       )}
+
+      <Text style={styles.heading}>Library</Text>
+      <Pressable
+        style={styles.secondary}
+        disabled={busy}
+        onPress={() =>
+          void run(async () => {
+            const result = await cleanDuplicateSongs();
+            await refresh();
+            setDialog({
+              title: 'Duplicates cleaned',
+              body:
+                result.removed === 0
+                  ? 'No duplicate songs found.'
+                  : `Merged ${result.mergedGroups} group(s) and removed ${result.removed} duplicate song(s). Setlists were updated.`,
+            });
+          })
+        }>
+        <Text style={styles.secondaryText}>Clean duplicates</Text>
+      </Pressable>
 
       <Text style={styles.heading}>Backup</Text>
       <Pressable
