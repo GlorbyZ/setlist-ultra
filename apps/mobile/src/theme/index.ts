@@ -15,6 +15,7 @@ export { AppThemeProvider, useTheme } from './ThemeProvider';
 export {
   THEMES,
   THEME_OPTIONS,
+  TYPE_SCALE,
   BRAND_GRADIENT,
   brand,
   isThemeId,
@@ -22,6 +23,7 @@ export {
   type AppTheme,
   type ThemeId,
   type ResolvedThemeId,
+  type TypeRole,
 } from './tokens';
 
 /** @deprecated Prefer `useTheme().theme`. Kept so leftover screens compile. */

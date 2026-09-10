@@ -26,14 +26,16 @@ export function SongViewer({
   capo = 0,
   hideChords = false,
   autoScrollSeconds,
-  fontSize = 18,
+  fontSize,
   onFontSizeChange,
 }: Props) {
   const { theme } = useTheme();
+  const chartSize = fontSize ?? theme.type.chart.fontSize;
+  const lyricLineHeight = Math.round(chartSize * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
   const displayDoc = transpose === 0 ? document : transposeDocument(document, transpose);
   const scrollRef = useRef<ScrollView>(null);
-  const fontSizeRef = useRef(fontSize);
-  fontSizeRef.current = fontSize;
+  const fontSizeRef = useRef(chartSize);
+  fontSizeRef.current = chartSize;
   const [contentH, setContentH] = useState(1);
   const [layoutH, setLayoutH] = useState(1);
 
@@ -71,21 +73,30 @@ export function SongViewer({
       onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
       {displayDoc.sections.map((section) => (
         <View key={section.id} style={styles.section}>
-          {section.label ? <Text style={[styles.sectionLabel, { color: theme.muted }]}>{section.label}</Text> : null}
+          {section.label ? (
+            <Text style={[styles.sectionLabel, { color: theme.muted, fontSize: theme.type.meta.fontSize }]}>
+              {section.label}
+            </Text>
+          ) : null}
           {section.lines.map((line) => {
             if (line.kind === 'blank') {
               return <View key={line.id} style={styles.blank} />;
             }
             if (hideChords) {
               return (
-                <Text key={line.id} style={[styles.lyricOnly, { fontSize, lineHeight: fontSize * 1.5, color: theme.text }]}>
+                <Text
+                  key={line.id}
+                  style={[
+                    styles.lyricOnly,
+                    { fontSize: chartSize, lineHeight: lyricLineHeight, color: theme.text, fontWeight: theme.type.chart.fontWeight },
+                  ]}>
                   {line.lyric ?? ''}
                 </Text>
               );
             }
             if (section.kind === 'tab') {
               return (
-                <Text key={line.id} style={[styles.tabLine, { fontSize: fontSize - 2, color: theme.muted }]}>
+                <Text key={line.id} style={[styles.tabLine, { fontSize: chartSize - 2, lineHeight: lyricLineHeight, color: theme.muted }]}>
                   {line.lyric ?? ''}
                 </Text>
               );
@@ -97,7 +108,7 @@ export function SongViewer({
                 slots={line.slots}
                 transpose={transpose}
                 capo={capo}
-                fontSize={fontSize}
+                fontSize={chartSize}
               />
             );
           })}
@@ -114,23 +125,23 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   container: {
     padding: 20,
-    paddingBottom: 32,
+    paddingBottom: 96,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 22,
   },
   sectionLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    opacity: 0.7,
+    fontWeight: '600',
+    opacity: 0.75,
     marginBottom: 8,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   blank: {
-    height: 12,
+    height: 14,
   },
   lyricOnly: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   tabLine: {
     fontFamily: 'SpaceMono',

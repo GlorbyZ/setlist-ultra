@@ -231,8 +231,8 @@ function makeStyles(t: AppTheme) {
   return {
     container: { flex: 1, backgroundColor: t.bg },
     content: { padding: 20, paddingBottom: 48 },
-    heading: { color: t.text, fontSize: 22, fontWeight: '800' as const, marginBottom: 8, marginTop: 12 },
-    body: { color: t.muted, lineHeight: 22, marginBottom: 12 },
+    heading: { color: t.text, fontSize: t.type.title.fontSize + 2, lineHeight: t.type.title.lineHeight + 2, fontWeight: t.type.title.fontWeight, marginBottom: 8, marginTop: 12 },
+    body: { color: t.muted, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight, marginBottom: 12 },
     status: { color: t.accent, marginBottom: 16, fontWeight: '600' as const },
     themeRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 8 },
     themeChip: {
@@ -286,7 +286,7 @@ function makeStyles(t: AppTheme) {
       borderWidth: 1,
       borderColor: t.border,
     },
-    cardTitle: { color: t.text, fontWeight: '700' as const, marginBottom: 6 },
-    cardBody: { color: t.muted, lineHeight: 20, marginBottom: 8 },
+    cardTitle: { color: t.text, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: '700' as const, marginBottom: 6 },
+    cardBody: { color: t.muted, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight + 2, fontWeight: t.type.meta.fontWeight, marginBottom: 8 },
   };
 }

@@ -17,9 +17,12 @@ export function ChordLyricLine({
   slots = [],
   transpose = 0,
   capo = 0,
-  fontSize = 18,
+  fontSize,
 }: Props) {
   const { theme } = useTheme();
+  const size = fontSize ?? theme.type.chart.fontSize;
+  const lyricLineHeight = Math.round(size * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
+  const chordLineHeight = Math.round(lyricLineHeight * 0.78);
   const chordRow = buildChordRow(lyric, slots, transpose, capo);
 
   return (
@@ -27,11 +30,20 @@ export function ChordLyricLine({
       <Text
         style={[
           styles.mono,
-          { fontSize: fontSize - 1, color: theme.accent, lineHeight: fontSize + 4 },
+          { fontSize: size - 1, color: theme.accent, lineHeight: chordLineHeight, fontWeight: '600' },
         ]}>
         {chordRow || ' '}
       </Text>
-      <Text style={[styles.mono, { fontSize, color: theme.text, lineHeight: fontSize + 8 }]}>
+      <Text
+        style={[
+          styles.mono,
+          {
+            fontSize: size,
+            color: theme.text,
+            lineHeight: lyricLineHeight,
+            fontWeight: theme.type.chart.fontWeight,
+          },
+        ]}>
         {lyric || ' '}
       </Text>
     </View>
@@ -62,6 +74,6 @@ function buildChordRow(
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 12 },
+  container: { marginBottom: 14 },
   mono: { fontFamily: 'SpaceMono' },
 });

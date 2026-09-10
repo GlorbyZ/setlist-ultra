@@ -116,6 +116,6 @@ function makeStyles(t: AppTheme) {
       justifyContent: 'center' as const,
       padding: 24,
     },
-    body: { color: t.muted, textAlign: 'center' as const, marginBottom: 16 },
+    body: { color: t.muted, textAlign: 'center' as const, marginBottom: 16, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight },
   };
 }

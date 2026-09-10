@@ -151,8 +151,9 @@ function makeMenuStyles(t: AppTheme) {
     scroll: { paddingTop: 8, paddingHorizontal: 12, paddingBottom: 20, gap: 4 },
     heading: {
       color: t.muted,
-      fontWeight: '600' as const,
-      fontSize: 12,
+      fontWeight: t.type.meta.fontWeight,
+      fontSize: t.type.meta.fontSize,
+      lineHeight: t.type.meta.lineHeight,
       marginBottom: 8,
       marginTop: 12,
       paddingHorizontal: 8,
@@ -161,7 +162,7 @@ function makeMenuStyles(t: AppTheme) {
     },
     row: { paddingVertical: 14, paddingHorizontal: 12, borderRadius: t.radius.md },
     rowOn: { backgroundColor: t.panel },
-    label: { color: t.text, fontWeight: '600' as const, fontSize: 16 },
+    label: { color: t.text, fontWeight: t.type.body.fontWeight, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight },
     labelOn: { color: t.accent },
   };
 }

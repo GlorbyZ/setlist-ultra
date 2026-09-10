@@ -108,10 +108,10 @@ function makeStyles(t: AppTheme) {
       borderWidth: 1,
       borderColor: t.border,
     },
-    title: { color: t.text, fontSize: 18, fontWeight: '700' as const },
-    meta: { color: t.muted, marginTop: 4 },
+    title: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },
+    meta: { color: t.muted, marginTop: 4, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight, fontWeight: t.type.meta.fontWeight },
     empty: { padding: 32, alignItems: 'center' as const },
-    emptyTitle: { color: t.text, fontSize: 20, fontWeight: '700' as const },
-    emptyBody: { color: t.muted, marginTop: 8, textAlign: 'center' as const },
+    emptyTitle: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },
+    emptyBody: { color: t.muted, marginTop: 8, textAlign: 'center' as const, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight },
   };
 }
