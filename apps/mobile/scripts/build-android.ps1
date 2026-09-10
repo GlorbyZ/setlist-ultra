@@ -45,7 +45,7 @@ if (-not (Test-Path "$buildRoot\android")) {
 $release = $args -notcontains "--debug"
 if (-not $release) {
     Write-Host ""
-    Write-Host "WARNING: Debug APK — requires 'npm run mobile' on your PC. Do NOT distribute." -ForegroundColor Yellow
+    Write-Host "WARNING: Debug APK - requires 'npm run mobile' on your PC. Do NOT distribute." -ForegroundColor Yellow
     Write-Host ""
 }
 
