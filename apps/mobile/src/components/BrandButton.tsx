@@ -1,7 +1,8 @@
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Text } from '@/components/Themed';
+import { PressableScale } from '@/src/motion';
 import { BRAND_GRADIENT, useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
@@ -9,15 +10,21 @@ type Props = {
   onPress: () => void;
   disabled?: boolean;
   busy?: boolean;
+  /** Drop bottom margin for dense action bars. */
+  compact?: boolean;
 };
 
-export function BrandButton({ label, onPress, disabled, busy }: Props) {
+export function BrandButton({ label, onPress, disabled, busy, compact }: Props) {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const inactive = disabled && !busy;
 
   return (
-    <Pressable onPress={onPress} disabled={disabled || busy} style={styles.wrap}>
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled || busy}
+      style={[styles.wrap, compact && styles.wrapCompact]}
+      scaleTo={0.97}>
       {inactive ? (
         <View style={[styles.gradient, styles.disabledFill]}>
           <Text style={styles.disabledLabel}>{label}</Text>
@@ -35,13 +42,14 @@ export function BrandButton({ label, onPress, disabled, busy }: Props) {
           )}
         </LinearGradient>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
 function makeStyles(t: AppTheme) {
   return {
     wrap: { marginBottom: 12 },
+    wrapCompact: { marginBottom: 0 },
     gradient: { paddingVertical: 14, alignItems: 'center' as const, borderRadius: t.radius.md },
     busy: { opacity: 0.85 },
     label: { color: t.accentText, fontWeight: '700' as const, fontSize: 16 },

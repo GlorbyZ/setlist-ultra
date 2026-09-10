@@ -1,11 +1,15 @@
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   FlatList,
   Keyboard,
+  LayoutAnimation,
+  Platform,
   Pressable,
   TextInput,
+  UIManager,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -13,10 +17,11 @@ import {
 import { Text } from '@/components/Themed';
 import { ActionSheet, BrandDialog } from '@/src/components/BrandDialog';
 import { BrandButton } from '@/src/components/BrandButton';
-import { SongsDrawer, type SongListId } from '@/src/components/SongsDrawer';
+import { SongsDrawer, SongsFilterPanel, type SongListId } from '@/src/components/SongsDrawer';
 import { SongViewer } from '@/src/components/SongViewer';
 import { UgImportSheet } from '@/src/components/UgImportSheet';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { PressableScale, useReduceMotion } from '@/src/motion';
 import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
 import { addSongToSetlist, deleteSong, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
 import { groupUgResults, mergeUgHits, searchUgTabs, UG_PAGE_SIZE, type UgSearchHit, type UgSongGroup } from '@/src/lib/ug-api';
@@ -34,6 +39,10 @@ const SORTS: { id: SortId; label: string }[] = [
 ];
 
 const MIN_LOCAL = 1;
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type ListRow =
   | { kind: 'heading'; id: string; title: string }
@@ -71,13 +80,28 @@ export default function SongsScreen() {
   const [importGroup, setImportGroup] = useState<UgSongGroup | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [wantOnline, setWantOnline] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const reduceMotion = useReduceMotion();
   const searchGen = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
-      return () => setDrawerOpen(false);
+      return () => {
+        setDrawerOpen(false);
+        setFiltersOpen(false);
+      };
     }, [setDrawerOpen]),
   );
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    LayoutAnimation.configureNext({
+      duration: 180,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+  }, [listId, sortId, filterKey, filterTag, filterArtist, filterSource, reduceMotion]);
 
   const keys = useMemo(
     () => [...new Set(songs.map((song) => song.originalKey).filter(Boolean) as string[])].sort(),
@@ -235,12 +259,13 @@ export default function SongsScreen() {
             submitBehavior="blurAndSubmit"
             onSubmitEditing={submitSearch}
           />
-          <View style={styles.chipRow}>
-            <View style={{ flex: 1 }}>
-              <BrandButton label="Add songs" onPress={() => router.push('/import')} />
+          <View style={styles.actionBar}>
+            <View style={styles.actionFlex}>
+              <BrandButton compact label="Add songs" onPress={() => router.push('/import')} />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.actionFlex}>
               <BrandButton
+                compact
                 label={selecting ? 'Done' : 'Select'}
                 onPress={() => {
                   setSelecting((on) => !on);
@@ -248,7 +273,34 @@ export default function SongsScreen() {
                 }}
               />
             </View>
+            <PressableScale
+              style={[styles.iconBtn, filtersOpen && styles.iconBtnOn]}
+              onPress={() => setFiltersOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Sort and filter">
+              <Ionicons name="options-outline" size={22} color={filtersOpen ? theme.accent : theme.text} />
+            </PressableScale>
+            <PressableScale
+              style={[styles.iconBtn, filtersOpen && styles.iconBtnOn]}
+              onPress={() => setFiltersOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={filtersOpen ? 'Collapse filters' : 'Expand filters'}>
+              <Ionicons name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={22} color={filtersOpen ? theme.accent : theme.text} />
+            </PressableScale>
           </View>
+          <SongsFilterPanel
+            open={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
+            filterKey={filterKey}
+            filterTag={filterTag}
+            filterArtist={filterArtist}
+            filterSourceLabel={filterSource === 'all' ? 'Source' : filterSource.toUpperCase()}
+            sortLabel={SORTS.find((s) => s.id === sortId)?.label ?? 'Title'}
+            onOpenFilter={(which) => {
+              if (which === 'sort') setSortOpen(true);
+              else setFilterOpen(which);
+            }}
+          />
           {selecting ? (
             <BrandButton
               label={selectedIds.length ? `Add ${selectedIds.length} to set` : 'Add to set'}
@@ -358,18 +410,7 @@ export default function SongsScreen() {
         </View>
       ) : null}
 
-      <SongsDrawer
-        listId={listId}
-        onSelectList={setListId}
-        filterKey={filterKey}
-        filterTag={filterTag}
-        filterArtist={filterArtist}
-        filterSourceLabel={filterSource === 'all' ? 'Source' : filterSource.toUpperCase()}
-        onOpenFilter={(which) => {
-          if (which === 'sort') setSortOpen(true);
-          else setFilterOpen(which);
-        }}
-      />
+      <SongsDrawer listId={listId} onSelectList={setListId} />
       <UgImportSheet
         group={importGroup}
         onClose={() => setImportGroup(null)}
@@ -540,6 +581,19 @@ function makeStyles(t: AppTheme) {
     listPane: { maxWidth: 420, borderRightWidth: 1, borderRightColor: t.border },
     toolbar: { padding: 16, gap: 8 },
     chipRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+    actionBar: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+    actionFlex: { flex: 1 },
+    iconBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: t.radius.md,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.panel,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    iconBtnOn: { borderColor: t.accent },
     chip: {
       backgroundColor: t.panel,
       borderRadius: t.radius.sm,

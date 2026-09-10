@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
-import { type ComponentProps } from 'react';
+import { type ComponentProps, useEffect } from 'react';
 import { type ColorValue, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -12,6 +13,7 @@ import {
   SongsHeaderTitle,
   TabsHeaderLeft,
 } from '@/src/providers/SongsChromeProvider';
+import { PRESS_SPRING, useReduceMotion } from '@/src/motion';
 import { BRAND_GRADIENT, useTheme } from '@/src/theme';
 
 function TabIcon({
@@ -25,8 +27,19 @@ function TabIcon({
   size: number;
   focused: boolean;
 }) {
+  const reduce = useReduceMotion();
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    if (reduce) {
+      scale.value = 1;
+      return;
+    }
+    scale.value = withSpring(focused ? 1.08 : 1, PRESS_SPRING);
+  }, [focused, reduce, scale]);
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
   return (
-    <View style={{ alignItems: 'center', width: 48 }}>
+    <Animated.View style={[{ alignItems: 'center', width: 48 }, anim]}>
       <Ionicons name={name} size={size} color={color} />
       {focused ? (
         <LinearGradient
@@ -38,7 +51,7 @@ function TabIcon({
       ) : (
         <View style={{ marginTop: 4, height: 2, width: 22 }} />
       )}
-    </View>
+    </Animated.View>
   );
 }
 

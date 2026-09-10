@@ -6,29 +6,42 @@ import { BrandMark } from '@/src/components/BrandMark';
 import { useTheme } from '@/src/theme';
 
 type SongsChromeValue = {
+  menuOpen: boolean;
+  setMenuOpen: (open: boolean) => void;
+  toggleMenu: () => void;
+  /** @deprecated use menuOpen */
   drawerOpen: boolean;
+  /** @deprecated use setMenuOpen */
   setDrawerOpen: (open: boolean) => void;
+  /** @deprecated use toggleMenu */
   toggleDrawer: () => void;
 };
 
 const SongsChromeContext = createContext<SongsChromeValue | null>(null);
 
 export function SongsChromeProvider({ children }: { children: ReactNode }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    setDrawerOpen(false);
+    setMenuOpen(false);
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setDrawerOpen(false);
+      if (state === 'active') setMenuOpen(false);
     });
     return () => sub.remove();
   }, []);
 
-  const toggleDrawer = useCallback(() => setDrawerOpen((open) => !open), []);
+  const toggleMenu = useCallback(() => setMenuOpen((open) => !open), []);
 
   const value = useMemo(
-    () => ({ drawerOpen, setDrawerOpen, toggleDrawer }),
-    [drawerOpen, toggleDrawer],
+    () => ({
+      menuOpen,
+      setMenuOpen,
+      toggleMenu,
+      drawerOpen: menuOpen,
+      setDrawerOpen: setMenuOpen,
+      toggleDrawer: toggleMenu,
+    }),
+    [menuOpen, toggleMenu],
   );
 
   return <SongsChromeContext.Provider value={value}>{children}</SongsChromeContext.Provider>;
@@ -40,22 +53,9 @@ export function useSongsChrome() {
   return ctx;
 }
 
-/** Left: opens/closes the downward filters/library expansion. */
+/** Spacer so the centered logo stays balanced against the right hamburger. */
 export function SongsHeaderLeft() {
-  const { theme } = useTheme();
-  const { drawerOpen, toggleDrawer } = useSongsChrome();
-  return (
-    <View style={{ paddingLeft: 8, justifyContent: 'center' }}>
-      <Pressable
-        onPress={toggleDrawer}
-        hitSlop={10}
-        style={{ paddingHorizontal: 4, paddingVertical: 4 }}
-        accessibilityRole="button"
-        accessibilityLabel={drawerOpen ? 'Collapse filters' : 'Expand filters'}>
-        <Ionicons name={drawerOpen ? 'chevron-up' : 'chevron-down'} size={26} color={theme.text} />
-      </Pressable>
-    </View>
-  );
+  return <View style={{ width: 42, paddingLeft: 8 }} />;
 }
 
 /** Center: SETLIST ULTRA wordmark. */
@@ -67,19 +67,19 @@ export function SongsHeaderTitle() {
   );
 }
 
-/** Right: hamburger menu (same panel as left expansion). */
+/** Right: single overflow menu (library / lists). */
 export function SongsHeaderRight() {
   const { theme } = useTheme();
-  const { drawerOpen, toggleDrawer } = useSongsChrome();
+  const { menuOpen, toggleMenu } = useSongsChrome();
   return (
     <View style={{ paddingRight: 8, justifyContent: 'center' }}>
       <Pressable
-        onPress={toggleDrawer}
+        onPress={toggleMenu}
         hitSlop={10}
         style={{ paddingHorizontal: 4, paddingVertical: 4 }}
         accessibilityRole="button"
-        accessibilityLabel={drawerOpen ? 'Close menu' : 'Open menu'}>
-        <Ionicons name={drawerOpen ? 'close' : 'menu'} size={26} color={theme.text} />
+        accessibilityLabel={menuOpen ? 'Close menu' : 'Open menu'}>
+        <Ionicons name={menuOpen ? 'close' : 'menu'} size={26} color={theme.text} />
       </Pressable>
     </View>
   );
