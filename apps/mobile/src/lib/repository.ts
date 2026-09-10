@@ -541,6 +541,12 @@ export async function updateSong(
     .where(eq(songs.id, id));
 }
 
+export async function deleteSongs(ids: string[]) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  for (const id of unique) await deleteSong(id);
+  return unique.length;
+}
+
 export async function deleteSong(id: string) {
   const db = await getDatabase();
   await db.update(songs).set({ deleted: 1, updatedAt: now() }).where(eq(songs.id, id));
@@ -688,6 +694,30 @@ export async function updateSetlistItem(
 export async function removeSetlistItem(id: string) {
   const db = await getDatabase();
   await db.update(setlistItems).set({ deleted: 1 }).where(eq(setlistItems.id, id));
+}
+
+/** Soft-delete duplicate setlists with the same title (keep oldest; songs stay in library). */
+export async function cleanDuplicateSetlists(scope?: LibraryScope) {
+  const s = scope ?? (await getLibraryScope());
+  const rows = await listSetlists(s);
+  const byTitle = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = (row.title || '').trim().toLowerCase();
+    if (!key) continue;
+    const list = byTitle.get(key) ?? [];
+    list.push(row);
+    byTitle.set(key, list);
+  }
+  let removed = 0;
+  for (const group of byTitle.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const dupe of sorted.slice(1)) {
+      await deleteSetlist(dupe.id);
+      removed += 1;
+    }
+  }
+  return { removed };
 }
 
 export async function deleteSetlist(id: string) {

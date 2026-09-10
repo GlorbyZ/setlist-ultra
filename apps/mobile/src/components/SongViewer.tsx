@@ -141,10 +141,11 @@ const styles = StyleSheet.create({
     height: 14,
   },
   lyricOnly: {
+    fontFamily: 'Verdana',
     marginBottom: 14,
   },
   tabLine: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Verdana',
     marginBottom: 2,
   },
 });

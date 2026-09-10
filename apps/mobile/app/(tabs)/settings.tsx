@@ -7,7 +7,7 @@ import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { isHostedConfigured } from '@/src/lib/config';
-import { cleanDuplicateSongs, exportSbpBytes } from '@/src/lib/repository';
+import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
 import {
   hostedSessionEmail,
@@ -186,6 +186,24 @@ export default function SettingsScreen() {
           })
         }>
         <Text style={styles.secondaryText}>Clean duplicates</Text>
+      </Pressable>
+      <Pressable
+        style={styles.secondary}
+        disabled={busy}
+        onPress={() =>
+          void run(async () => {
+            const result = await cleanDuplicateSetlists();
+            await refresh({ setlistsOnly: true });
+            setDialog({
+              title: 'Duplicate sets cleaned',
+              body:
+                result.removed === 0
+                  ? 'No duplicate setlists found.'
+                  : `Removed ${result.removed} duplicate setlist(s). Songs stay in your library.`,
+            });
+          })
+        }>
+        <Text style={styles.secondaryText}>Clean duplicate sets</Text>
       </Pressable>
 
       <Text style={styles.heading}>Backup</Text>

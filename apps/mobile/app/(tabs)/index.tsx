@@ -24,7 +24,7 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 import { PressableScale, pressedStyle, useReduceMotion } from '@/src/motion';
 import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
 import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
-import { addSongToSetlist, deleteSong, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
+import { addSongToSetlist, deleteSong, deleteSongs, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
 import { type UgSongGroup } from '@/src/lib/ug-api';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
@@ -241,11 +241,23 @@ export default function SongsScreen() {
             }}
           />
           {selecting ? (
-            <BrandButton
-              label={selectedIds.length ? `Add ${selectedIds.length} to set` : 'Add to set'}
-              disabled={!selectedIds.length}
-              onPress={() => setSetPickerOpen(true)}
-            />
+            <View style={{ gap: 8 }}>
+              <BrandButton
+                label={selectedIds.length ? `Add ${selectedIds.length} to set` : 'Add to set'}
+                disabled={!selectedIds.length}
+                onPress={() => setSetPickerOpen(true)}
+              />
+              <BrandButton
+                label={selectedIds.length ? `Delete ${selectedIds.length}` : 'Delete selected'}
+                disabled={!selectedIds.length}
+                onPress={() =>
+                  setDialog({
+                    title: 'Delete selected songs?',
+                    body: `Remove ${selectedIds.length} song(s) from this library. Setlists keep other songs.`,
+                  })
+                }
+              />
+            </View>
           ) : null}
         </View>
 
@@ -431,31 +443,48 @@ export default function SongsScreen() {
         body={dialog?.body ?? 'Favorite, delete, or cancel.'}
         onClose={() => setDialog(null)}
         actions={
-          dialog?.songId
+          dialog?.title === 'Delete selected songs?'
             ? [
-                {
-                  label: (() => {
-                    const song = songs.find((s) => s.id === dialog.songId);
-                    return song && isFavorite(song) ? 'Unfavorite' : 'Favorite';
-                  })(),
-                  onPress: () => {
-                    const song = songs.find((s) => s.id === dialog.songId);
-                    if (song) void updateSong(song.id, { tags: toggleFavoriteTags(song) }).then(() => refresh());
-                    setDialog(null);
-                  },
-                },
                 {
                   label: 'Delete',
                   danger: true,
                   onPress: () => {
-                    const id = dialog.songId;
+                    const ids = selectedIds.slice();
                     setDialog(null);
-                    if (id) void deleteSong(id).then(() => refresh());
+                    void deleteSongs(ids).then(async () => {
+                      setSelecting(false);
+                      setPicked({});
+                      await refresh();
+                    });
                   },
                 },
                 { label: 'Cancel', onPress: () => setDialog(null) },
               ]
-            : [{ label: 'OK', onPress: () => setDialog(null) }]
+            : dialog?.songId
+              ? [
+                  {
+                    label: (() => {
+                      const song = songs.find((s) => s.id === dialog.songId);
+                      return song && isFavorite(song) ? 'Unfavorite' : 'Favorite';
+                    })(),
+                    onPress: () => {
+                      const song = songs.find((s) => s.id === dialog.songId);
+                      if (song) void updateSong(song.id, { tags: toggleFavoriteTags(song) }).then(() => refresh());
+                      setDialog(null);
+                    },
+                  },
+                  {
+                    label: 'Delete',
+                    danger: true,
+                    onPress: () => {
+                      const id = dialog.songId;
+                      setDialog(null);
+                      if (id) void deleteSong(id).then(() => refresh());
+                    },
+                  },
+                  { label: 'Cancel', onPress: () => setDialog(null) },
+                ]
+              : [{ label: 'OK', onPress: () => setDialog(null) }]
         }
       />
     </View>

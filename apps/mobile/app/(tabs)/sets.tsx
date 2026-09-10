@@ -1,13 +1,14 @@
-﻿import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
+import { BrandDialog } from '@/src/components/BrandDialog';
 import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { formatDate } from '@/src/lib/format';
-import { createSetlist, setlistDurations } from '@/src/lib/repository';
+import { createSetlist, deleteSetlist, setlistDurations } from '@/src/lib/repository';
 import { pressedStyle } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
@@ -19,6 +20,9 @@ export default function SetsScreen() {
   const [creating, setCreating] = useState(false);
   const [durations, setDurations] = useState<Record<string, number>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -41,6 +45,8 @@ export default function SetsScreen() {
       cancelled = true;
     };
   }, [setlists]);
+
+  const selectedIds = Object.keys(picked).filter((id) => picked[id]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -65,7 +71,28 @@ export default function SetsScreen() {
   return (
     <View style={styles.container}>
       <LibrarySwitcher />
-      <BrandButton label="+ New set" onPress={() => void handleCreate()} busy={creating} />
+      <View style={styles.toolbar}>
+        <View style={styles.toolbarFlex}>
+          <BrandButton label="+ New set" onPress={() => void handleCreate()} busy={creating} />
+        </View>
+        <View style={styles.toolbarFlex}>
+          <BrandButton
+            label={managing ? 'Done' : 'Manage'}
+            onPress={() => {
+              setManaging((v) => !v);
+              setPicked({});
+            }}
+          />
+        </View>
+      </View>
+
+      {managing ? (
+        <BrandButton
+          label={selectedIds.length ? `Delete ${selectedIds.length}` : 'Delete selected'}
+          disabled={!selectedIds.length}
+          onPress={() => setConfirmBulk(true)}
+        />
+      ) : null}
 
       {error ? (
         <View style={styles.empty}>
@@ -95,28 +122,66 @@ export default function SetsScreen() {
               <Text style={styles.emptyBody}>Tap + New set.</Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <Pressable
-              unstable_pressDelay={0}
-              style={pressedStyle(styles.row)}
-              onPress={() => router.push(`/setlist/${item.id}`)}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.meta}>
-                {formatDate(item.eventDate)}
-                {item.pinned ? ' · Pinned' : ''}
-                {durations[item.id] != null ? ` · ${Math.round(durations[item.id] / 60)} min` : ''}
-              </Text>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const on = managing && picked[item.id];
+            return (
+              <Pressable
+                unstable_pressDelay={0}
+                style={pressedStyle([styles.row, on && styles.rowOn])}
+                onPress={() => {
+                  if (managing) {
+                    setPicked((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
+                    return;
+                  }
+                  router.push(`/setlist/${item.id}`);
+                }}>
+                <Text style={styles.title}>
+                  {managing ? (on ? '✓ ' : '○ ') : ''}
+                  {item.title}
+                </Text>
+                <Text style={styles.meta}>
+                  {formatDate(item.eventDate)}
+                  {item.pinned ? ' · Pinned' : ''}
+                  {durations[item.id] != null ? ` · ${Math.round(durations[item.id] / 60)} min` : ''}
+                </Text>
+              </Pressable>
+            );
+          }}
         />
       )}
+
+      <BrandDialog
+        visible={confirmBulk}
+        title="Delete selected sets?"
+        body={`Remove ${selectedIds.length} set(s). Songs stay in your library.`}
+        onClose={() => setConfirmBulk(false)}
+        actions={[
+          {
+            label: 'Delete',
+            danger: true,
+            onPress: () => {
+              const ids = selectedIds.slice();
+              setConfirmBulk(false);
+              void (async () => {
+                for (const id of ids) await deleteSetlist(id);
+                setManaging(false);
+                setPicked({});
+                await refresh({ setlistsOnly: true });
+              })();
+            },
+          },
+          { label: 'Cancel', onPress: () => setConfirmBulk(false) },
+        ]}
+      />
     </View>
   );
 }
 
 function makeStyles(t: AppTheme) {
   return {
-    container: { flex: 1, backgroundColor: t.bg, padding: 16 },
+    container: { flex: 1, backgroundColor: t.bg, padding: 16, gap: 10 },
+    toolbar: { flexDirection: 'row' as const, gap: 8 },
+    toolbarFlex: { flex: 1 },
     loadingBox: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.bg, paddingTop: 40 },
     list: { paddingBottom: 40 },
     row: {
@@ -127,6 +192,7 @@ function makeStyles(t: AppTheme) {
       borderWidth: 1,
       borderColor: t.border,
     },
+    rowOn: { borderColor: t.accent },
     title: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },
     meta: { color: t.muted, marginTop: 4, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight, fontWeight: t.type.meta.fontWeight },
     empty: { padding: 32, alignItems: 'center' as const },

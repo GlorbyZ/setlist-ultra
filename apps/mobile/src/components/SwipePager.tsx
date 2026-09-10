@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { MOTION_FAST, MOTION_MED, SNAP_SPRING, useReduceMotion } from '@/src/motion';
+import { MOTION_MED, SNAP_SPRING, useReduceMotion } from '@/src/motion';
 import { useTheme } from '@/src/theme';
 
 type Props = {
@@ -26,6 +26,11 @@ type Props = {
   enabled?: boolean;
 };
 
+/**
+ * Gallery swipe: three warm pages on a track.
+ * On settle, React swaps prev/center/next then useLayoutEffect snaps tx→0
+ * before paint. Never fades opacity to 0 (that caused a blank-frame flash).
+ */
 export function SwipePager({
   children,
   prevPage,
@@ -39,28 +44,21 @@ export function SwipePager({
   const { theme } = useTheme();
   const reduceMotion = useReduceMotion();
   const tx = useSharedValue(0);
-  const opacity = useSharedValue(1);
   const locked = useSharedValue(false);
 
-  // After JS commits the new center page, snap transform on this layout pass
-  // before paint. cancelAnimation avoids a late withTiming frame painting the
-  // outgoing chart on top of the incoming page (swipe ghost/flash).
   useLayoutEffect(() => {
     cancelAnimation(tx);
-    cancelAnimation(opacity);
     tx.value = 0;
-    opacity.value = 1;
     locked.value = false;
-  }, [pageKey, opacity, tx, locked]);
+  }, [pageKey, tx, locked]);
 
   const settle = (dir: 1 | -1) => {
     if (dir === 1 && onNext) onNext();
     if (dir === -1 && onPrev) onPrev();
+    // pageKey path: tx snaps in useLayoutEffect after the new center commits.
     if (!pageKey) {
       cancelAnimation(tx);
-      cancelAnimation(opacity);
       tx.value = 0;
-      opacity.value = 1;
       locked.value = false;
     }
   };
@@ -68,13 +66,8 @@ export function SwipePager({
   const finishSlide = (dir: 1 | -1) => {
     'worklet';
     if (reduceMotion) {
-      opacity.value = withTiming(0, { duration: MOTION_FAST }, (done) => {
-        if (!done) {
-          locked.value = false;
-          return;
-        }
-        runOnJS(settle)(dir);
-      });
+      // Instant commit — no fade-through-blank.
+      runOnJS(settle)(dir);
       return;
     }
     const target = dir === 1 ? -width : width;
@@ -83,9 +76,7 @@ export function SwipePager({
         locked.value = false;
         return;
       }
-      // Hide for the commit frame so a stale tx cannot flash the wrong slot
-      // (or the outgoing song) while React swaps prev/center/next.
-      opacity.value = 0;
+      // Keep opacity at 1. Incoming page is already painted in the neighbor slot.
       runOnJS(settle)(dir);
     });
   };
@@ -124,7 +115,6 @@ export function SwipePager({
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value - width }],
-    opacity: opacity.value,
   }));
 
   const pageStyle = [styles.page, { width, backgroundColor: theme.bg }];
