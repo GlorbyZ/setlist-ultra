@@ -1,4 +1,4 @@
-import { type ReactNode, useLayoutEffect } from 'react';
+﻿import { type ReactNode, useLayoutEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -39,16 +39,17 @@ export function SwipePager({
   const opacity = useSharedValue(1);
   const locked = useSharedValue(false);
 
+  // Commit new center page, then snap transform before paint — avoids
+  // one-frame flash of the wrong slot after a completed swipe.
   useLayoutEffect(() => {
     tx.value = 0;
     opacity.value = 1;
     locked.value = false;
-  }, [pageKey, opacity, tx]);
+  }, [pageKey, opacity, tx, locked]);
 
   const settle = (dir: 1 | -1) => {
     if (dir === 1 && onNext) onNext();
     if (dir === -1 && onPrev) onPrev();
-    // pageKey layout effect snaps tx back after neighbors remount
     if (!pageKey) {
       tx.value = 0;
       opacity.value = 1;
@@ -120,9 +121,15 @@ export function SwipePager({
     <GestureDetector gesture={pan}>
       <View style={styles.viewport}>
         <Animated.View style={[styles.track, { width: width * 3 }, animatedStyle]}>
-          <View style={[styles.page, { width }]}>{prevPage}</View>
-          <View style={[styles.page, { width }]}>{children}</View>
-          <View style={[styles.page, { width }]}>{nextPage}</View>
+          <View style={[styles.page, { width }]} collapsable={false}>
+            {prevPage}
+          </View>
+          <View style={[styles.page, { width }]} collapsable={false}>
+            {children}
+          </View>
+          <View style={[styles.page, { width }]} collapsable={false}>
+            {nextPage}
+          </View>
         </Animated.View>
       </View>
     </GestureDetector>

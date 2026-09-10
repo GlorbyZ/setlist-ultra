@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -10,10 +10,8 @@ import { MOTION_FAST, MOTION_MED, PressableScale } from '@/src/motion';
 import { BRAND_GRADIENT, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
-  title: string;
-  meta?: string;
-  capo?: number;
-  tempo?: number | null;
+  /** Bumps idle chrome when the active song changes. */
+  chromeKey?: string;
   children?: ReactNode;
   onCapo?: (delta: number) => void;
   onEdit?: () => void;
@@ -27,15 +25,15 @@ type Props = {
   scrolling?: boolean;
   onZoom?: (delta: number) => void;
   padDock?: boolean;
+  tempo?: number | null;
+  /** Opens Songbook Pro–style setlist quick access (Live + active set only). */
+  onOpenSetlist?: () => void;
 };
 
 const IDLE_MS = 4200;
 
 export function LiveChrome({
-  title,
-  meta,
-  capo = 0,
-  tempo,
+  chromeKey,
   children,
   onCapo,
   onEdit,
@@ -48,6 +46,8 @@ export function LiveChrome({
   onToggleScroll,
   scrolling,
   onZoom,
+  tempo,
+  onOpenSetlist,
 }: Props) {
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
@@ -69,7 +69,7 @@ export function LiveChrome({
     return () => {
       if (idleTimer.current) clearTimeout(idleTimer.current);
     };
-  }, [bump, title]);
+  }, [bump, chromeKey]);
 
   useEffect(() => {
     if (open) {
@@ -82,7 +82,6 @@ export function LiveChrome({
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
   const bottomPad = Math.max(insets.bottom, 10);
-  const metaLine = [meta, onCapo ? `Capo ${capo}` : null].filter(Boolean).join(' · ');
 
   return (
     <View style={styles.shell}>
@@ -99,36 +98,24 @@ export function LiveChrome({
         />
       ) : null}
 
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
-        <View style={styles.headerText}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          {metaLine ? (
-            <Pressable
-              unstable_pressDelay={0}
-              disabled={!onCapo}
-              onPress={() => {
-                if (!onCapo) return;
-                bump();
-                onCapo(1);
-              }}
-              onLongPress={() => {
-                if (!onCapo) return;
-                bump();
-                onCapo(-1);
-              }}
-              delayLongPress={280}
-              accessibilityLabel={onCapo ? `Capo ${capo}. Tap to raise, long-press to lower.` : undefined}>
-              <Text style={styles.meta} numberOfLines={1}>
-                {metaLine}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-
       <View style={styles.stage}>{children}</View>
+
+      {onOpenSetlist ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.setlistFabWrap, { paddingTop: Math.max(insets.top, 8) }]}>
+          <PressableScale
+            style={styles.setlistFab}
+            scaleTo={0.92}
+            onPress={() => {
+              bump();
+              onOpenSetlist();
+            }}
+            accessibilityLabel="Open setlist">
+            <Text style={styles.setlistFabIcon}>☰</Text>
+          </PressableScale>
+        </View>
+      ) : null}
 
       <Animated.View
         pointerEvents="box-none"
@@ -296,34 +283,26 @@ function makeStyles(t: AppTheme) {
   return {
     shell: { flex: 1, backgroundColor: t.bg },
     hidden: { position: 'absolute' as const, width: 1, height: 1, opacity: 0 },
-    header: {
+    stage: { flex: 1 },
+    setlistFabWrap: {
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      zIndex: 5,
+      paddingLeft: 8,
+      paddingBottom: 4,
+    },
+    setlistFab: {
+      width: 40,
+      height: 40,
+      borderRadius: t.radius.md,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
-      paddingHorizontal: 16,
-      paddingTop: 8,
-      paddingBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: t.border,
-      backgroundColor: t.bg,
-      zIndex: 2,
+      backgroundColor: overlayBg,
+      borderWidth: 1,
+      borderColor: t.border,
     },
-    headerText: { alignItems: 'center' as const, justifyContent: 'center' as const, maxWidth: '100%' as const },
-    title: {
-      color: t.text,
-      fontSize: t.type.title.fontSize,
-      lineHeight: t.type.title.lineHeight,
-      fontWeight: t.type.title.fontWeight,
-      textAlign: 'center' as const,
-    },
-    meta: {
-      color: t.muted,
-      marginTop: 2,
-      fontSize: t.type.meta.fontSize,
-      lineHeight: t.type.meta.lineHeight,
-      fontWeight: t.type.meta.fontWeight,
-      textAlign: 'center' as const,
-    },
-    stage: { flex: 1 },
+    setlistFabIcon: { color: t.text, fontSize: 18, fontWeight: '700' as const, marginTop: -1 },
     overlay: {
       position: 'absolute' as const,
       left: 0,
