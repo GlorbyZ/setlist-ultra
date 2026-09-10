@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text as RNText, View } from 'react-native';
+import type { NativeSyntheticEvent, TextLayoutEventData } from 'react-native';
 import type { ChordSlot } from '@setlist-ultra/core';
 import { displayChord } from '@setlist-ultra/core';
 import { Text } from '@/components/Themed';
@@ -11,16 +12,15 @@ type Props = {
   transpose?: number;
   capo?: number;
   fontSize?: number;
+  chordColor?: string;
+  chordScale?: number;
 };
 
-/** Marker so space-only prefixes still get non-zero layout width on Android. */
-const MEASURE_PAD = '汉';
-
 /**
- * Songbook Pro–style chord layout with Verdana (proportional):
- * - Same fontSize / weight / family on chord + lyric
- * - ChordSlot.at is a logical lyric-character anchor
- * - Chord X = measured width(PAD + lyric.slice(0, at)) - width(PAD)
+ * Songbook Pro–style chord layout with Verdana:
+ * - ChordSlot.at is a lyric-character anchor
+ * - X comes from onTextLayout of the prefix (NBSP so Android keeps spaces)
+ * - Chords sit in absolutely positioned Views — Android ignores `left` on Text
  */
 export function ChordLyricLine({
   lyric,
@@ -28,19 +28,23 @@ export function ChordLyricLine({
   transpose = 0,
   capo = 0,
   fontSize,
+  chordColor,
+  chordScale = 1,
 }: Props) {
   const { theme } = useTheme();
   const size = fontSize ?? theme.type.chart.fontSize;
   const lyricLineHeight = Math.round(size * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
-  const chordLineHeight = Math.round(lyricLineHeight * 0.78);
+  const chordSize = Math.round(size * chordScale);
+  const chordLineHeight = Math.round(lyricLineHeight * 0.78 * chordScale);
+  const ink = chordColor ?? theme.accent;
   const chartFont = useMemo(
     () => ({
       fontSize: size,
       fontFamily: 'Verdana' as const,
-      fontWeight: theme.type.chart.fontWeight,
+      fontWeight: '400' as const,
       ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : null),
     }),
-    [size, theme.type.chart.fontWeight],
+    [size],
   );
 
   const sorted = useMemo(() => [...slots].sort((a, b) => a.at - b.at), [slots]);
@@ -48,87 +52,87 @@ export function ChordLyricLine({
     () => [...new Set(sorted.map((slot) => Math.max(0, slot.at)))].sort((a, b) => a - b),
     [sorted],
   );
-  const anchorKey = anchors.join(',');
   const isChordOnly = !lyric.trim() && sorted.length > 0;
 
-  const [padWidth, setPadWidth] = useState(0);
-  /** Raw onLayout width of PAD + prefix (includes pad). */
-  const [rawWidths, setRawWidths] = useState<Record<number, number>>({});
-
-  useEffect(() => {
-    setPadWidth(0);
-    setRawWidths({});
-  }, [lyric, size, theme.type.chart.fontWeight, anchorKey]);
+  const [prefixWidths, setPrefixWidths] = useState<Record<number, number>>({});
 
   if (isChordOnly) {
     const chordRow = buildApproxChordRow(sorted, transpose, capo);
     return (
       <View style={styles.container}>
-        <Text style={[chartFont, { color: theme.accent, lineHeight: chordLineHeight }]}>{chordRow || ' '}</Text>
-        <Text style={[chartFont, { color: theme.text, lineHeight: lyricLineHeight }]}>{' '}</Text>
+        <RNText
+          allowFontScaling={false}
+          style={[chartFont, { color: ink, lineHeight: chordLineHeight, fontSize: chordSize }]}>
+          {chordRow || ' '}
+        </RNText>
+        <RNText allowFontScaling={false} style={[chartFont, { color: theme.text, lineHeight: lyricLineHeight }]}>
+          {' '}
+        </RNText>
       </View>
     );
   }
 
-  const measured =
-    padWidth > 0 && anchors.length > 0
-      ? anchors.every((at) => rawWidths[at] != null)
-      : anchors.length === 0;
-
   return (
     <View style={styles.container}>
-      <View style={styles.measureBox} collapsable={false}>
-        <Text
-          style={chartFont}
-          onLayout={(e) => {
-            const w = e.nativeEvent.layout.width;
-            if (w > 0) setPadWidth((prev) => (prev === w ? prev : w));
-          }}>
-          {MEASURE_PAD}
-        </Text>
+      <View style={styles.measureBox} pointerEvents="none" collapsable={false}>
         {anchors.map((at) => (
-          <Text
-            key={`m-${at}-${size}`}
-            style={chartFont}
-            onLayout={(e) => {
-              const w = e.nativeEvent.layout.width;
-              if (w <= 0) return;
-              setRawWidths((prev) => (prev[at] === w ? prev : { ...prev, [at]: w }));
-            }}>
-            {MEASURE_PAD}
-            {lyric.slice(0, at)}
-          </Text>
+          <RNText
+            key={`m-${at}-${size}-${lyric.length}`}
+            allowFontScaling={false}
+            numberOfLines={1}
+            style={[chartFont, styles.measureText]}
+            onTextLayout={(e) => onPrefixLayout(e, at, setPrefixWidths)}>
+            {prefixForMeasure(lyric, at)}
+          </RNText>
         ))}
       </View>
 
       <View style={[styles.chordRow, { height: chordLineHeight }]}>
         {sorted.map((slot, index) => {
           const at = Math.max(0, slot.at);
-          if (!measured) {
-            // Only paint at=0 early; hide others to avoid left-stack blob.
-            if (at > 0) return null;
-          }
-          const left = measured && padWidth > 0 ? Math.max(0, (rawWidths[at] ?? padWidth) - padWidth) : 0;
+          const left = prefixWidths[at] ?? 0;
           return (
-            <Text
+            <View
               key={`${slot.at}-${slot.chord}-${index}`}
-              style={[
-                chartFont,
-                styles.chord,
-                { left, color: theme.accent, lineHeight: chordLineHeight },
-              ]}>
-              {displayChord(slot.chord, capo, transpose)}
-            </Text>
+              pointerEvents="none"
+              style={[styles.chordSlot, { left, height: chordLineHeight }]}>
+              <RNText
+                allowFontScaling={false}
+                numberOfLines={1}
+                style={[chartFont, { color: ink, lineHeight: chordLineHeight, fontSize: chordSize }]}>
+                {displayChord(slot.chord, capo, transpose)}
+              </RNText>
+            </View>
           );
         })}
       </View>
 
-      <Text style={[chartFont, { color: theme.text, lineHeight: lyricLineHeight }]}>{lyric || ' '}</Text>
+      <Text allowFontScaling={false} style={[chartFont, { color: theme.text, lineHeight: lyricLineHeight }]}>
+        {lyric || ' '}
+      </Text>
     </View>
   );
 }
 
-/** Chord-only fallback: space-padded approx (no lyric metrics). */
+function prefixForMeasure(lyric: string, at: number): string {
+  const prefix = lyric.slice(0, Math.max(0, at)).replace(/ /g, '\u00A0');
+  return prefix.length ? prefix : '\u200B';
+}
+
+function onPrefixLayout(
+  e: NativeSyntheticEvent<TextLayoutEventData>,
+  at: number,
+  setPrefixWidths: (update: (prev: Record<number, number>) => Record<number, number>) => void,
+) {
+  const w = e.nativeEvent.lines?.[0]?.width ?? 0;
+  if (at === 0) {
+    setPrefixWidths((prev) => (prev[0] === 0 ? prev : { ...prev, [0]: 0 }));
+    return;
+  }
+  if (w <= 0) return;
+  setPrefixWidths((prev) => (prev[at] === w ? prev : { ...prev, [at]: w }));
+}
+
 function buildApproxChordRow(slots: ChordSlot[], transpose: number, capo: number): string {
   const chars: string[] = [];
   let cursor = 0;
@@ -144,12 +148,18 @@ function buildApproxChordRow(slots: ChordSlot[], transpose: number, capo: number
 
 const styles = StyleSheet.create({
   container: { marginBottom: 14 },
-  chordRow: { position: 'relative', width: '100%' },
-  chord: { position: 'absolute', top: 0 },
+  chordRow: { position: 'relative', width: '100%', overflow: 'visible' },
+  chordSlot: { position: 'absolute', top: 0 },
   measureBox: {
     position: 'absolute',
-    left: -10000,
+    left: 0,
     top: 0,
-    opacity: 1,
+    width: 8000,
+    opacity: 0,
+  },
+  measureText: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
 });

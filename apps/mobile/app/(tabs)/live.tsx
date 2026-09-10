@@ -1,13 +1,14 @@
 ﻿import { type Href, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { LiveChrome } from '@/src/components/LiveChrome';
 import { LiveSongPage } from '@/src/components/LiveSongPage';
 import { SetlistQuickAccess } from '@/src/components/SetlistQuickAccess';
-import { SongViewer } from '@/src/components/SongViewer';
-import { SwipePager } from '@/src/components/SwipePager';
+import { SongViewer, type SongViewerHandle } from '@/src/components/SongViewer';
+import { SwipePager, type SwipePagerPage } from '@/src/components/SwipePager';
+import { useLiveChartSession } from '@/src/display/useLiveChartSession';
 import { useLiveQueue } from '@/src/hooks/useLiveQueue';
 import { resolveAutoscrollSeconds } from '@/src/lib/autoscroll';
 import {
@@ -21,18 +22,19 @@ import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCac
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
+import { chartJumpTargets } from '@setlist-ultra/core';
 
 export default function LiveTab() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue();
+  const { fontSize, setFontSize, hideChords, setHideChords } = useLiveChartSession();
   const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
-  const [hideChords, setHideChords] = useState(false);
   const [scrolling, setScrolling] = useState(false);
-  const [fontSize, setFontSize] = useState(18);
   const [setlistOpen, setSetlistOpen] = useState(false);
+  const viewerRef = useRef<SongViewerHandle>(null);
 
   const prevSong = index > 0 ? queue[index - 1] : null;
   const nextSong = index < queue.length - 1 ? queue[index + 1] : null;
@@ -110,6 +112,73 @@ export default function LiveTab() {
   const duration = resolveAutoscrollSeconds(song.duration2, song.durationSeconds);
   const reserveTopLeft = hasSetContext;
   const sounding = currentSoundingKey(song.originalKey, keyShift);
+  const canJumpSection = chartJumpTargets(chart).length > 0;
+  const pages: SwipePagerPage[] = [];
+  if (prevChart && prevSong) {
+    pages.push({
+      key: prevSong.id,
+      queueIndex: index - 1,
+      content: (
+        <LiveSongPage
+          title={prevSong.title}
+          meta={songMetaLine(prevSong, prevSong.keyShift ?? 0)}
+          capo={prevSong.capo ?? 0}
+          reserveTopLeft={reserveTopLeft}>
+          <SongViewer
+            document={prevChart}
+            transpose={prevSong.keyShift ?? 0}
+            capo={prevSong.capo ?? 0}
+            hideChords={hideChords}
+            fontSize={fontSize}
+          />
+        </LiveSongPage>
+      ),
+    });
+  }
+  pages.push({
+    key: song.id,
+    queueIndex: index,
+    content: (
+      <LiveSongPage
+        title={song.title}
+        meta={songMetaLine(song, keyShift)}
+        capo={capo}
+        onCapo={(d) => changeCapo(wrapCapo(capo, d))}
+        reserveTopLeft={reserveTopLeft}>
+        <SongViewer
+          ref={viewerRef}
+          document={chart}
+          transpose={keyShift}
+          capo={capo}
+          hideChords={hideChords}
+          autoScrollSeconds={scrolling ? duration : undefined}
+          fontSize={fontSize}
+          onFontSizeChange={setFontSize}
+        />
+      </LiveSongPage>
+    ),
+  });
+  if (nextChart && nextSong) {
+    pages.push({
+      key: nextSong.id,
+      queueIndex: index + 1,
+      content: (
+        <LiveSongPage
+          title={nextSong.title}
+          meta={songMetaLine(nextSong, nextSong.keyShift ?? 0)}
+          capo={nextSong.capo ?? 0}
+          reserveTopLeft={reserveTopLeft}>
+          <SongViewer
+            document={nextChart}
+            transpose={nextSong.keyShift ?? 0}
+            capo={nextSong.capo ?? 0}
+            hideChords={hideChords}
+            fontSize={fontSize}
+          />
+        </LiveSongPage>
+      ),
+    });
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -131,66 +200,18 @@ export default function LiveTab() {
         scrolling={scrolling}
         onZoom={(d) => setFontSize((v) => Math.min(32, Math.max(14, v + d * 2)))}
         onOpenSetlist={hasSetContext ? () => setSetlistOpen(true) : undefined}
+        onNextSection={canJumpSection ? () => viewerRef.current?.scrollToNextSection() : undefined}
         onPedal={(action) => {
           if (action === 'next') go(1);
           if (action === 'prev') go(-1);
           if (action === 'scrollDown') setScrolling(true);
         }}>
         <SwipePager
-          pageKey={song.id}
+          index={index}
           onPrev={prevSong ? () => go(-1) : undefined}
           onNext={nextSong ? () => go(1) : undefined}
-          prevPage={
-            prevChart && prevSong ? (
-              <LiveSongPage
-                title={prevSong.title}
-                meta={songMetaLine(prevSong, prevSong.keyShift ?? 0)}
-                capo={prevSong.capo ?? 0}
-                reserveTopLeft={reserveTopLeft}>
-                <SongViewer
-                  document={prevChart}
-                  transpose={prevSong.keyShift ?? 0}
-                  capo={prevSong.capo ?? 0}
-                  hideChords={hideChords}
-                  fontSize={fontSize}
-                />
-              </LiveSongPage>
-            ) : null
-          }
-          nextPage={
-            nextChart && nextSong ? (
-              <LiveSongPage
-                title={nextSong.title}
-                meta={songMetaLine(nextSong, nextSong.keyShift ?? 0)}
-                capo={nextSong.capo ?? 0}
-                reserveTopLeft={reserveTopLeft}>
-                <SongViewer
-                  document={nextChart}
-                  transpose={nextSong.keyShift ?? 0}
-                  capo={nextSong.capo ?? 0}
-                  hideChords={hideChords}
-                  fontSize={fontSize}
-                />
-              </LiveSongPage>
-            ) : null
-          }>
-          <LiveSongPage
-            title={song.title}
-            meta={songMetaLine(song, keyShift)}
-            capo={capo}
-            onCapo={(d) => changeCapo(wrapCapo(capo, d))}
-            reserveTopLeft={reserveTopLeft}>
-            <SongViewer
-              document={chart}
-              transpose={keyShift}
-              capo={capo}
-              hideChords={hideChords}
-              autoScrollSeconds={scrolling ? duration : undefined}
-              fontSize={fontSize}
-              onFontSizeChange={setFontSize}
-            />
-          </LiveSongPage>
-        </SwipePager>
+          pages={pages}
+        />
       </LiveChrome>
 
       {setContext && hasSetContext ? (

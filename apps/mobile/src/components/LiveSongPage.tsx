@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
+import { useDisplayPrefs } from '@/src/display/DisplayPrefsProvider';
 import { useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
@@ -19,32 +20,40 @@ type Props = {
 /** Header + chart as one Live swipe page unit. */
 export function LiveSongPage({ title, meta, onCapo, capo = 0, children, reserveTopLeft }: Props) {
   const styles = useThemedStyles(makeStyles);
+  const { prefs } = useDisplayPrefs();
   const insets = useSafeAreaInsets();
   const capoLabel = onCapo || capo > 0 ? `Capo ${capo}` : null;
-  const metaLine = [meta, capoLabel].filter(Boolean).join(' · ');
+  const metaLine = prefs.showMeta ? [meta, capoLabel].filter(Boolean).join(' · ') : '';
+  const showHeader = prefs.showTitle || Boolean(metaLine);
 
   return (
     <View style={styles.page}>
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
-        <View style={[styles.headerText, reserveTopLeft && styles.headerTextPad]}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          {metaLine ? (
-            <Pressable
-              unstable_pressDelay={0}
-              disabled={!onCapo}
-              onPress={() => onCapo?.(1)}
-              onLongPress={() => onCapo?.(-1)}
-              delayLongPress={280}
-              accessibilityLabel={onCapo ? `Capo ${capo}. Tap to raise, long-press to lower.` : undefined}>
-              <Text style={styles.meta} numberOfLines={1}>
-                {metaLine}
+      {showHeader ? (
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
+          <View style={[styles.headerText, reserveTopLeft && styles.headerTextPad]}>
+            {prefs.showTitle ? (
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
               </Text>
-            </Pressable>
-          ) : null}
+            ) : null}
+            {metaLine ? (
+              <Pressable
+                unstable_pressDelay={0}
+                disabled={!onCapo}
+                onPress={() => onCapo?.(1)}
+                onLongPress={() => onCapo?.(-1)}
+                delayLongPress={280}
+                accessibilityLabel={onCapo ? `Capo ${capo}. Tap to raise, long-press to lower.` : undefined}>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {metaLine}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={{ height: Math.max(insets.top, reserveTopLeft ? 56 : 8) }} />
+      )}
       <View style={styles.stage}>{children}</View>
     </View>
   );
@@ -63,7 +72,7 @@ function makeStyles(t: AppTheme) {
       backgroundColor: t.bg,
     },
     headerText: { alignItems: 'center' as const, justifyContent: 'center' as const, maxWidth: '100%' as const },
-    headerTextPad: { paddingHorizontal: 36 },
+    headerTextPad: { paddingHorizontal: 48 },
     title: {
       color: t.text,
       fontSize: t.type.title.fontSize,

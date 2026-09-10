@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { AntDesign } from '@expo/vector-icons';
 
 import { Text } from '@/components/Themed';
@@ -18,10 +19,11 @@ import {
   isGoogleAuthConfigured,
   syncPersonalLibrary,
 } from '@/src/lib/hosted';
-import { THEME_OPTIONS, useTheme, useThemedStyles, type AppTheme, type ThemeId } from '@/src/theme';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function SettingsScreen() {
-  const { theme, themeId, setThemeId } = useTheme();
+  const { theme } = useTheme();
+  const router = useRouter();
   const { refresh } = useLibrary();
   const styles = useThemedStyles(makeStyles);
   const hosted = isHostedConfigured();
@@ -46,7 +48,7 @@ export default function SettingsScreen() {
     try {
       await fn();
     } catch (error) {
-      setDialog({ title: 'Could not finish', body: error instanceof Error ? error.message : 'Unknown error' });
+      setDialog({ title: 'Could not finish', body: errorMessage(error) });
     } finally {
       setBusy(false);
     }
@@ -54,21 +56,14 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Appearance</Text>
-      <View style={styles.themeRow}>
-        {THEME_OPTIONS.map((option) => {
-          const on = themeId === option.id;
-          return (
-            <Pressable
-              key={option.id}
-              style={[styles.themeChip, on && styles.themeChipOn]}
-              onPress={() => void setThemeId(option.id as ThemeId)}>
-              <View style={[styles.themeSwatch, { backgroundColor: swatchColor(option.id) }]} />
-              <Text style={[styles.themeLabel, on && styles.themeLabelOn]}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Text style={styles.heading}>Look & Stage</Text>
+      <Pressable style={styles.navRow} onPress={() => router.push('/look')}>
+        <View style={styles.toolCopy}>
+          <Text style={styles.navTitle}>Presets, chart, Live tools</Text>
+          <Text style={styles.navHint}>Theme, type size, page mode, and which buttons show on stage.</Text>
+        </View>
+        <Text style={styles.navChevron}>›</Text>
+      </Pressable>
 
       <Text style={styles.heading}>Sync</Text>
       {hosted ? (
@@ -156,6 +151,7 @@ export default function SettingsScreen() {
             onPress={() =>
               void run(async () => {
                 await syncPersonalLibrary();
+                await refresh();
                 setStatus('Catalog + library synced');
               })
             }
@@ -235,10 +231,12 @@ export default function SettingsScreen() {
   );
 }
 
-function swatchColor(id: ThemeId) {
-  if (id === 'ultra-light') return '#FFFFFF';
-  if (id === 'system') return '#8E8E93';
-  return '#000000';
+function errorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return 'Unknown error';
 }
 
 function makeStyles(t: AppTheme) {
@@ -246,31 +244,24 @@ function makeStyles(t: AppTheme) {
     container: { flex: 1, backgroundColor: t.bg },
     content: { padding: 20, paddingBottom: 48 },
     heading: { color: t.text, fontSize: t.type.title.fontSize + 2, lineHeight: t.type.title.lineHeight + 2, fontWeight: t.type.title.fontWeight, marginBottom: 8, marginTop: 12 },
-    body: { color: t.muted, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight, marginBottom: 12 },
-    status: { color: t.accent, marginBottom: 16, fontWeight: '600' as const },
-    signedIn: { color: t.text, fontWeight: '700' as const, marginBottom: 4 },
-    themeRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 8 },
-    themeChip: {
+    navRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: 8,
       borderWidth: 1,
       borderColor: t.border,
       backgroundColor: t.panel,
       borderRadius: t.radius.md,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
+      padding: 14,
+      marginBottom: 8,
+      gap: 12,
     },
-    themeChipOn: { borderColor: t.accent },
-    themeSwatch: {
-      width: 16,
-      height: 16,
-      borderRadius: 4,
-      borderWidth: 1,
-      borderColor: t.border,
-    },
-    themeLabel: { color: t.muted, fontWeight: '700' as const, fontSize: 12 },
-    themeLabelOn: { color: t.text },
+    toolCopy: { flex: 1 },
+    navTitle: { color: t.text, fontWeight: '700' as const, fontSize: 16 },
+    navHint: { color: t.muted, marginTop: 4, fontSize: 13, lineHeight: 18 },
+    navChevron: { color: t.muted, fontSize: 28, lineHeight: 32, fontWeight: '300' as const },
+    body: { color: t.muted, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight, marginBottom: 12 },
+    status: { color: t.accent, marginBottom: 16, fontWeight: '600' as const },
+    signedIn: { color: t.text, fontWeight: '700' as const, marginBottom: 4 },
     input: {
       backgroundColor: t.inputBg,
       color: t.text,

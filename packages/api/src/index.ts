@@ -6,7 +6,7 @@ export type HostedChart = {
   source_provider: string | null;
   source_external_id: string | null;
   chordpro: string;
-  ast: string | null;
+  ast: unknown;
   title: string | null;
   artist: string | null;
   original_key: string | null;

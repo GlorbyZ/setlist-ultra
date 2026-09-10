@@ -47,7 +47,8 @@ Imports from workspace packages require Metro `extraNodeModules` (already config
 | Missing Reanimated Babel plugin | Instant native crash on launch |
 | No `wasm` in Metro `assetExts` | Web/SSR bundle fails on expo-sqlite |
 | No expo-router root link | `expo start` crashes on typed routes |
-| Hoisting expo-router to root `package.json` without resolving peers | npm ERESOLVE conflicts |
+| Absolute `left` on `Text` for chord X | Android stacks every chord at x=0. Put the chord in a positioned `View`; measure prefixes with `onTextLayout`. |
+| Remounting Live pages by slot after swipe | Incoming chart remounts, chords remeasure, scroll jumps. Key pages by song id; settle index on the UI thread. |
 
 ## Device / env
 

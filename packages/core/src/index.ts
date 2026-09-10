@@ -7,5 +7,6 @@ export * from './hash/md5';
 export * from './key';
 export * from './chordpro/parse';
 export * from './chordpro/export';
+export * from './chart/jumpTargets';
 export * from './sbp/types';
 export * from './sbp/pack';

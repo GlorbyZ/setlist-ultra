@@ -157,3 +157,19 @@ create policy setlist_items_access on public.setlist_items for all to authentica
       )
   )
 );
+
+update public.charts
+  set source_external_id = null
+  where source_external_id is not null and btrim(source_external_id) = '';
+
+update public.charts
+  set source_provider = null
+  where source_provider is not null and btrim(source_provider) = '';
+
+create unique index if not exists library_items_user_chart_uidx
+  on public.library_items (user_id, chart_id)
+  where user_id is not null;
+
+create unique index if not exists library_items_org_chart_uidx
+  on public.library_items (org_id, chart_id)
+  where org_id is not null;

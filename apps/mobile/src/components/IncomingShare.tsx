@@ -6,6 +6,7 @@ import { Alert } from 'react-native';
 
 import { filenameFromUri } from '@/src/lib/format';
 import { readBytesFromUri } from '@/src/lib/files';
+import { openSongInLive } from '@/src/lib/openSongInLive';
 import { importAnyChartFile, saveSongFromUg } from '@/src/lib/repository';
 import { importUgTab } from '@/src/lib/ug-api';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -43,7 +44,7 @@ export function IncomingShare() {
       const result = await importAnyChartFile(bytes, name ?? filenameFromUri(uri));
       await refresh();
       if (result.kind === 'song' && result.songId) {
-        router.push(`/song/${result.songId}` as Href);
+        await openSongInLive(router, result.songId);
         return;
       }
       Alert.alert('Imported', `${result.songs} songs, ${result.sets} sets`);
@@ -79,7 +80,7 @@ export function IncomingShare() {
           const tab = await importUgTab(ugUrl);
           const songId = await saveSongFromUg(tab, ugUrl);
           await refresh();
-          router.push(`/song/${songId}` as Href);
+          await openSongInLive(router, songId);
         } catch (error) {
           handled.current.delete(ugUrl);
           Alert.alert('Import failed', error instanceof Error ? error.message : 'Could not import that tab.');

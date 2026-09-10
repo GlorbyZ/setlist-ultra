@@ -14,6 +14,7 @@ import {
 import { Text } from '@/components/Themed';
 import { KEY_OPTIONS } from '@setlist-ultra/core';
 import { copySongToLibrary, getLibraryScope, getSong, updateSong } from '@/src/lib/repository';
+import { openSongInLive } from '@/src/lib/openSongInLive';
 import { printSong } from '@/src/lib/print';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -171,7 +172,7 @@ export default function EditorScreen() {
             <Text style={styles.ghostText}>Copy to group library</Text>
           </Pressable>
         ) : null}
-        <Pressable style={styles.ghost} onPress={() => router.push(`/song/${song.id}`)}>
+        <Pressable style={styles.ghost} onPress={() => void openSongInLive(router, song.id)}>
           <Text style={styles.ghostText}>Open live view</Text>
         </Pressable>
       </ScrollView>

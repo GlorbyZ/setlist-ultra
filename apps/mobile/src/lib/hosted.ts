@@ -10,9 +10,11 @@ import {
   findChartByHash,
   findOrCreateChart,
   getLibraryScope,
+  getSetlistItems,
   getSyncState,
   insertLibrarySong,
   listOrgs,
+  listSetlists,
   listSongs,
   newId,
   now,
@@ -20,7 +22,7 @@ import {
   updateSong,
 } from './repository';
 import { getDatabase } from './db';
-import { orgs } from '@setlist-ultra/db';
+import { orgs, setlistItems, setlists } from '@setlist-ultra/db';
 import { eq } from 'drizzle-orm';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -56,6 +58,38 @@ export function getHostedClient() {
     });
   }
   return client;
+}
+
+function hostedError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (error && typeof error === 'object') {
+    const row = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [row.message, row.details, row.hint, row.code].filter(
+      (part): part is string => typeof part === 'string' && part.trim().length > 0,
+    );
+    if (parts.length) return new Error(parts.join(' · '));
+  }
+  return new Error('Sync failed.');
+}
+
+function blankToNull(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function parseAst(raw?: string | null) {
+  if (!raw?.trim()) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isUuid(value?: string | null): value is string {
+  return Boolean(
+    value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value),
+  );
 }
 
 async function persistSupabaseSession(email?: string | null, accessToken?: string | null, refreshToken?: string | null) {
@@ -95,7 +129,7 @@ export async function hostedSignIn(email: string, password: string) {
   const supabase = getHostedClient();
   if (!supabase) throw new Error('Hosted sync is not configured. Add EXPO_PUBLIC_SUPABASE_URL and ANON key.');
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  if (error) throw hostedError(error);
   await persistSupabaseSession(email, data.session?.access_token, data.session?.refresh_token);
   return data.user;
 }
@@ -104,7 +138,7 @@ export async function hostedSignUp(email: string, password: string) {
   const supabase = getHostedClient();
   if (!supabase) throw new Error('Hosted sync is not configured.');
   const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) throw error;
+  if (error) throw hostedError(error);
   if (data.session) {
     await persistSupabaseSession(email, data.session.access_token, data.session.refresh_token);
   }
@@ -134,7 +168,7 @@ export async function hostedSignInWithGoogle() {
       },
     },
   });
-  if (error) throw error;
+  if (error) throw hostedError(error);
   if (!data.url) throw new Error('Could not start Google sign-in.');
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
@@ -169,7 +203,7 @@ async function createSessionFromUrl(url: string) {
 
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw error;
+    if (error) throw hostedError(error);
     return data.session;
   }
 
@@ -178,7 +212,7 @@ async function createSessionFromUrl(url: string) {
       access_token,
       refresh_token: refresh_token ?? '',
     });
-    if (error) throw error;
+    if (error) throw hostedError(error);
     return data.session;
   }
 
@@ -188,7 +222,7 @@ async function createSessionFromUrl(url: string) {
   const fallbackCode = typeof qp.code === 'string' ? qp.code : undefined;
   if (fallbackCode) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(fallbackCode);
-    if (error) throw error;
+    if (error) throw hostedError(error);
     return data.session;
   }
 
@@ -219,17 +253,21 @@ export async function lookupRemoteChart(contentHash: string, sourceProvider?: st
   const supabase = getHostedClient();
   if (!supabase) return null;
 
-  if (sourceProvider && sourceExternalId) {
+  const provider = blankToNull(sourceProvider);
+  const externalId = blankToNull(sourceExternalId);
+  if (provider && externalId) {
     const bySource = await supabase
       .from('charts')
       .select('*')
-      .eq('source_provider', sourceProvider)
-      .eq('source_external_id', sourceExternalId)
+      .eq('source_provider', provider)
+      .eq('source_external_id', externalId)
       .maybeSingle();
+    if (bySource.error && bySource.error.code !== 'PGRST116') throw hostedError(bySource.error);
     if (bySource.data) return bySource.data as HostedChart;
   }
 
   const byHash = await supabase.from('charts').select('*').eq('content_hash', contentHash).maybeSingle();
+  if (byHash.error && byHash.error.code !== 'PGRST116') throw hostedError(byHash.error);
   return (byHash.data as HostedChart | null) ?? null;
 }
 
@@ -245,28 +283,88 @@ export async function pushChartToHost(input: {
 }) {
   const supabase = getHostedClient();
   if (!supabase) return null;
-  const existing = await lookupRemoteChart(
-    input.contentHash,
-    input.sourceProvider ?? undefined,
-    input.sourceExternalId ?? undefined,
-  );
+  const sourceProvider = blankToNull(input.sourceProvider);
+  const sourceExternalId = blankToNull(input.sourceExternalId);
+  const existing = await lookupRemoteChart(input.contentHash, sourceProvider ?? undefined, sourceExternalId ?? undefined);
   if (existing) return existing;
   const { data, error } = await supabase
     .from('charts')
     .insert({
       content_hash: input.contentHash,
       chordpro: input.chordpro,
-      ast: input.ast ? JSON.parse(input.ast) : null,
-      title: input.title,
-      artist: input.artist,
-      original_key: input.originalKey,
-      source_provider: input.sourceProvider,
-      source_external_id: input.sourceExternalId,
+      ast: parseAst(input.ast),
+      title: input.title ?? null,
+      artist: input.artist ?? null,
+      original_key: input.originalKey ?? null,
+      source_provider: sourceProvider,
+      source_external_id: sourceExternalId,
     })
     .select('*')
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    const again = await lookupRemoteChart(input.contentHash, sourceProvider ?? undefined, sourceExternalId ?? undefined);
+    if (again) return again;
+    throw hostedError(error);
+  }
   return data as HostedChart;
+}
+
+type RemoteLibraryRow = {
+  id: string;
+  title: string;
+  artist: string;
+  capo?: number | null;
+  key_shift?: number | null;
+  charts?: HostedChart | null;
+};
+
+async function upsertLibraryItem(
+  supabase: NonNullable<ReturnType<typeof getHostedClient>>,
+  input: {
+    remoteId?: string | null;
+    userId: string | null;
+    orgId: string | null;
+    chartId: string;
+    title: string;
+    artist: string;
+    capo: number | null;
+    keyShift: number | null;
+    durationSeconds: number | null;
+    extras: Record<string, unknown>;
+  },
+) {
+  const payload = {
+    user_id: input.userId,
+    org_id: input.orgId,
+    chart_id: input.chartId,
+    title: input.title,
+    artist: input.artist,
+    capo: input.capo,
+    key_shift: input.keyShift,
+    duration_seconds: input.durationSeconds,
+    extras: input.extras,
+    updated_at: now(),
+  };
+
+  let existingId: string | null = isUuid(input.remoteId) ? input.remoteId : null;
+  if (!existingId) {
+    let query = supabase.from('library_items').select('id').eq('chart_id', input.chartId);
+    query = input.orgId ? query.eq('org_id', input.orgId) : query.eq('user_id', input.userId);
+    const found = await query.maybeSingle();
+    if (found.error && found.error.code !== 'PGRST116') throw hostedError(found.error);
+    existingId = found.data?.id ?? null;
+  }
+
+  if (existingId) {
+    const { error } = await supabase.from('library_items').update(payload).eq('id', existingId);
+    if (error) throw hostedError(error);
+    return existingId;
+  }
+
+  const inserted = await supabase.from('library_items').insert(payload).select('id').maybeSingle();
+  if (inserted.error) throw hostedError(inserted.error);
+  if (!inserted.data?.id) throw new Error('Cloud library row was not created.');
+  return inserted.data.id as string;
 }
 
 export async function syncPersonalLibrary() {
@@ -279,9 +377,12 @@ export async function syncPersonalLibrary() {
 
   const scope = await getLibraryScope();
   const localSongs = await listSongs(scope);
+  const libraryIdBySong = new Map<string, string>();
+  const userId = scope.libraryKind === 'personal' ? user.id : null;
+  const orgId = scope.libraryKind === 'org' ? (scope.orgId ?? null) : null;
 
   for (const song of localSongs) {
-    if (!song.contentHash) continue;
+    if (song.deleted || !song.contentHash) continue;
     const remoteChart = await pushChartToHost({
       contentHash: song.contentHash,
       chordpro: song.chordpro,
@@ -294,45 +395,44 @@ export async function syncPersonalLibrary() {
     });
     if (!remoteChart) continue;
 
-    await supabase.from('library_items').upsert({
-      id: song.remoteId ?? song.id,
-      user_id: scope.libraryKind === 'personal' ? user.id : null,
-      org_id: scope.libraryKind === 'org' ? scope.orgId : null,
-      chart_id: remoteChart.id,
+    const remoteLibraryId = await upsertLibraryItem(supabase, {
+      remoteId: song.remoteId,
+      userId,
+      orgId,
+      chartId: remoteChart.id,
       title: song.title,
       artist: song.artist,
       capo: song.capo,
-      key_shift: song.keyShift,
-      duration_seconds: song.duration2 ?? song.durationSeconds,
+      keyShift: song.keyShift,
+      durationSeconds: song.duration2 ?? song.durationSeconds,
       extras: {
         notesText: song.notesText,
         tags: song.tags,
         syncId: song.syncId,
         sbpId: song.sbpId,
+        localId: song.id,
       },
-      updated_at: now(),
     });
-    if (!song.remoteId) {
-      await updateSong(song.id, { remoteId: song.remoteId ?? song.id, syncStatus: 'synced' });
-    } else {
-      await updateSong(song.id, { syncStatus: 'synced' });
-    }
+    libraryIdBySong.set(song.id, remoteLibraryId);
+    await updateSong(song.id, { remoteId: remoteLibraryId, syncStatus: 'synced' });
   }
 
   const remoteFilter =
-    scope.libraryKind === 'org' && scope.orgId
-      ? supabase.from('library_items').select('*, charts(*)').eq('org_id', scope.orgId)
+    orgId
+      ? supabase.from('library_items').select('*, charts(*)').eq('org_id', orgId)
       : supabase.from('library_items').select('*, charts(*)').eq('user_id', user.id);
 
   const { data: remoteItems, error } = await remoteFilter;
-  if (error) throw error;
+  if (error) throw hostedError(error);
 
-  for (const item of remoteItems ?? []) {
-    const chart = (item as { charts?: HostedChart }).charts;
+  const refreshedSongs = await listSongs(scope);
+  for (const item of (remoteItems ?? []) as RemoteLibraryRow[]) {
+    const chart = item.charts;
     if (!chart?.chordpro) continue;
-    const localChartId = await findOrCreateChart({
+    const astJson = typeof chart.ast === 'string' ? chart.ast : chart.ast ? JSON.stringify(chart.ast) : undefined;
+    await findOrCreateChart({
       chordpro: chart.chordpro,
-      ast: chart.ast ?? undefined,
+      ast: astJson,
       title: chart.title ?? item.title,
       artist: chart.artist ?? item.artist,
       originalKey: chart.original_key ?? undefined,
@@ -340,9 +440,13 @@ export async function syncPersonalLibrary() {
       sourceProvider: chart.source_provider,
       sourceExternalId: chart.source_external_id,
     });
-    const existing = localSongs.find((s) => s.remoteId === item.id || s.contentHash === chart.content_hash);
-    if (existing) continue;
-    await insertLibrarySong({
+    const existing = refreshedSongs.find((s) => s.remoteId === item.id || s.contentHash === chart.content_hash);
+    if (existing) {
+      if (existing.remoteId !== item.id) await updateSong(existing.id, { remoteId: item.id, syncStatus: 'synced' });
+      libraryIdBySong.set(existing.id, item.id);
+      continue;
+    }
+    const localId = await insertLibrarySong({
       title: item.title,
       artist: item.artist,
       capo: item.capo ?? 0,
@@ -351,14 +455,141 @@ export async function syncPersonalLibrary() {
       sourceProvider: chart.source_provider,
       sourceExternalId: chart.source_external_id ?? undefined,
       scope,
+      softDedupe: false,
     });
-    void localChartId;
+    await updateSong(localId, { remoteId: item.id, syncStatus: 'synced' });
+    libraryIdBySong.set(localId, item.id);
   }
+
+  await syncSetlists(supabase, {
+    userId: user.id,
+    scope,
+    orgId,
+    libraryIdBySong,
+  });
 
   await saveSyncState({
     provider: 'supabase',
     accountEmail: user.email ?? undefined,
   });
+}
+
+async function syncSetlists(
+  supabase: NonNullable<ReturnType<typeof getHostedClient>>,
+  input: {
+    userId: string;
+    scope: Awaited<ReturnType<typeof getLibraryScope>>;
+    orgId: string | null;
+    libraryIdBySong: Map<string, string>;
+  },
+) {
+  const db = await getDatabase();
+  const localSets = await listSetlists(input.scope);
+
+  for (const set of localSets) {
+    if (set.deleted) continue;
+    const payload = {
+      user_id: input.orgId ? null : input.userId,
+      org_id: input.orgId,
+      title: set.title,
+      event_date: set.eventDate || null,
+      extras: {
+        syncId: set.syncId,
+        localId: set.id,
+        notes: set.notes,
+        pinned: set.pinned,
+      },
+      updated_at: now(),
+    };
+
+    let remoteSetId = isUuid(set.remoteId) ? set.remoteId : null;
+    if (remoteSetId) {
+      const { error } = await supabase.from('setlists').update(payload).eq('id', remoteSetId);
+      if (error) throw hostedError(error);
+    } else {
+      const inserted = await supabase.from('setlists').insert(payload).select('id').maybeSingle();
+      if (inserted.error) throw hostedError(inserted.error);
+      remoteSetId = inserted.data?.id ?? null;
+      if (!remoteSetId) throw new Error('Cloud setlist was not created.');
+      await db.update(setlists).set({ remoteId: remoteSetId, syncStatus: 'synced', updatedAt: now() }).where(eq(setlists.id, set.id));
+    }
+
+    const { error: delError } = await supabase.from('setlist_items').delete().eq('setlist_id', remoteSetId);
+    if (delError) throw hostedError(delError);
+
+    const items = await getSetlistItems(set.id);
+    const rows = items.map((item, index) => ({
+      setlist_id: remoteSetId,
+      library_item_id: item.songId ? input.libraryIdBySong.get(item.songId) ?? null : null,
+      sort_order: item.sortOrder ?? index,
+      key_offset: item.keyOffset ?? 0,
+      extras: {
+        itemType: item.itemType,
+        noteContent: item.noteContent,
+        timerSeconds: item.timerSeconds,
+        localId: item.id,
+      },
+    }));
+    if (rows.length) {
+      const { error: insError } = await supabase.from('setlist_items').insert(rows);
+      if (insError) throw hostedError(insError);
+    }
+    if (isUuid(set.remoteId)) {
+      await db.update(setlists).set({ syncStatus: 'synced', updatedAt: now() }).where(eq(setlists.id, set.id));
+    }
+  }
+
+  const remoteSetsQuery = input.orgId
+    ? supabase.from('setlists').select('*, setlist_items(*)').eq('org_id', input.orgId)
+    : supabase.from('setlists').select('*, setlist_items(*)').eq('user_id', input.userId);
+  const { data: remoteSets, error } = await remoteSetsQuery;
+  if (error) throw hostedError(error);
+
+  const songByRemoteLibraryId = new Map<string, string>();
+  for (const [localId, remoteId] of input.libraryIdBySong) songByRemoteLibraryId.set(remoteId, localId);
+
+  for (const remote of remoteSets ?? []) {
+    const extras = (remote.extras ?? {}) as { localId?: string };
+    const existing = localSets.find((set) => set.remoteId === remote.id || set.id === extras.localId);
+    let localSetId = existing?.id;
+    if (!localSetId) {
+      localSetId = newId();
+      await db.insert(setlists).values({
+        id: localSetId,
+        libraryKind: input.scope.libraryKind,
+        orgId: input.scope.orgId ?? null,
+        remoteId: remote.id,
+        title: remote.title,
+        eventDate: remote.event_date ?? now().slice(0, 10),
+        syncStatus: 'synced',
+        createdAt: now(),
+        updatedAt: now(),
+      });
+    } else if (existing?.remoteId !== remote.id) {
+      await db.update(setlists).set({ remoteId: remote.id, syncStatus: 'synced', updatedAt: now() }).where(eq(setlists.id, localSetId));
+    }
+
+    const remoteItems = (remote.setlist_items ?? []) as {
+      library_item_id?: string | null;
+      sort_order?: number;
+      key_offset?: number;
+      extras?: { itemType?: string; noteContent?: string; timerSeconds?: number };
+    }[];
+    if (!existing) {
+      for (const [index, item] of remoteItems.entries()) {
+        await db.insert(setlistItems).values({
+          id: newId(),
+          setlistId: localSetId,
+          sortOrder: item.sort_order ?? index,
+          itemType: item.extras?.itemType === 'note' ? 'note' : item.extras?.itemType === 'timer' ? 'timer' : 'song',
+          songId: item.library_item_id ? songByRemoteLibraryId.get(item.library_item_id) ?? null : null,
+          noteContent: item.extras?.noteContent ?? null,
+          timerSeconds: item.extras?.timerSeconds ?? null,
+          keyOffset: item.key_offset ?? 0,
+        });
+      }
+    }
+  }
 }
 
 export async function syncOrgFromHost(inviteCode: string) {
@@ -369,7 +600,7 @@ export async function syncOrgFromHost(inviteCode: string) {
   if (!userData.user) throw new Error('Not signed in.');
 
   const { data: org, error } = await supabase.from('orgs').select('*').eq('invite_code', inviteCode).maybeSingle();
-  if (error) throw error;
+  if (error) throw hostedError(error);
   if (!org) throw new Error('Invite not found');
 
   await supabase.from('org_members').upsert({
@@ -426,7 +657,7 @@ export async function listHostedMembers(remoteOrgId: string) {
     .from('org_members')
     .select('user_id, role, created_at')
     .eq('org_id', remoteOrgId);
-  if (error) throw error;
+  if (error) throw hostedError(error);
   return (data ?? []) as { user_id: string; role: string; created_at: string }[];
 }
 
@@ -434,7 +665,7 @@ export async function removeHostedMember(remoteOrgId: string, userId: string) {
   const supabase = getHostedClient();
   if (!supabase) throw new Error('Hosted sync is not configured.');
   const { error } = await supabase.from('org_members').delete().eq('org_id', remoteOrgId).eq('user_id', userId);
-  if (error) throw error;
+  if (error) throw hostedError(error);
 }
 
 export async function leaveHostedOrg(remoteOrgId: string) {
@@ -450,7 +681,7 @@ export async function deleteHostedOrg(remoteOrgId: string) {
   const supabase = getHostedClient();
   if (!supabase) throw new Error('Hosted sync is not configured.');
   const { error } = await supabase.from('orgs').delete().eq('id', remoteOrgId);
-  if (error) throw error;
+  if (error) throw hostedError(error);
 }
 
 export { findChartByHash };

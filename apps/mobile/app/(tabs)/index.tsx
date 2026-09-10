@@ -24,7 +24,8 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 import { PressableScale, pressedStyle, useReduceMotion } from '@/src/motion';
 import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
 import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
-import { addSongToSetlist, deleteSong, deleteSongs, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
+import { addSongToSetlist, deleteSong, deleteSongs, parseSongDocument, updateSong } from '@/src/lib/repository';
+import { openSongInLive } from '@/src/lib/openSongInLive';
 import { type UgSongGroup } from '@/src/lib/ug-api';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
@@ -183,8 +184,7 @@ export default function SongsScreen() {
 
   const openSong = (item: SongRow) => {
     setSelectedId(item.id);
-    void patchAppState({ currentSongId: item.id, currentSetlistId: null, currentSetIndex: 0 });
-    if (!split) router.push(`/song/${item.id}`);
+    if (!split) void openSongInLive(router, item.id);
   };
 
   const submitSearch = () => {
@@ -353,7 +353,7 @@ export default function SongsScreen() {
         <View style={styles.preview}>
           <View style={styles.previewBar}>
             <Text style={styles.previewTitle}>{selected.title}</Text>
-            <PressableScale style={styles.ghostChip} scaleTo={0.94} onPress={() => router.push(`/song/${selected.id}`)}>
+            <PressableScale style={styles.ghostChip} scaleTo={0.94} onPress={() => void openSongInLive(router, selected.id)}>
               <Text style={styles.ghostChipText}>Live</Text>
             </PressableScale>
             <PressableScale style={styles.ghostChip} scaleTo={0.94} onPress={() => router.push(`/editor/${selected.id}` as Href)}>
@@ -370,7 +370,7 @@ export default function SongsScreen() {
         onClose={() => setImportGroup(null)}
         onImported={(songId) => {
           void refresh();
-          router.push(`/song/${songId}`);
+          void openSongInLive(router, songId);
         }}
       />
 

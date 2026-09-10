@@ -37,8 +37,8 @@ npm run mobile          # or: npm run mobile:clear after native builds
 ## Ship an APK (recommended)
 
 ```bash
-git tag v0.1.3
-git push origin v0.1.3
+git tag v4.0.1
+git push origin v4.0.1
 ```
 
 CI workflow `.github/workflows/android-release.yml` builds and attaches `setlist-ultra-android.apk`.
@@ -105,3 +105,4 @@ Hosted catalog (optional): see `services/api/README.md`. LAN Manager host: `npm 
 - [Expo SDK 57 docs](https://docs.expo.dev/versions/v57.0.0/)
 - [Expo monorepos](https://docs.expo.dev/guides/monorepos/)
 - [Reanimated install](https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/getting-started/)
+- [Gig-parity UI plan](SBP-UI-PARITY-PLAN.md)

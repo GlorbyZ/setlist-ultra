@@ -28,6 +28,7 @@ import { importUgTab, type UgSongGroup } from '@/src/lib/ug-api';
 import { config } from '@/src/lib/config';
 import { pickBinaryFile, pickImage } from '@/src/lib/files';
 import { lookupRemoteChart } from '@/src/lib/hosted';
+import { openSongInLive } from '@/src/lib/openSongInLive';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function ImportScreen() {
@@ -49,7 +50,7 @@ export default function ImportScreen() {
 
   const afterImport = async (songId?: string) => {
     await refresh();
-    if (songId) router.replace(`/song/${songId}`);
+    if (songId) await openSongInLive(router, songId, 'replace');
     else router.back();
   };
 
@@ -287,8 +288,10 @@ export default function ImportScreen() {
         group={importGroup}
         onClose={() => setImportGroup(null)}
         onImported={(songId) => {
-          void refresh();
-          router.replace(`/song/${songId}`);
+          void (async () => {
+            await refresh();
+            await openSongInLive(router, songId, 'replace');
+          })();
         }}
       />
 

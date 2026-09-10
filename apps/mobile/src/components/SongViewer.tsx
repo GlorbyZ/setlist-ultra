@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import type { SongDocument } from '@setlist-ultra/core';
+import { chartJumpTargets } from '@setlist-ultra/core';
 import { ChordLyricLine } from './ChordLyricLine';
 import { Text } from '@/components/Themed';
 import { DEFAULT_AUTOSCROLL_SECONDS } from '@/src/lib/autoscroll';
+import { useDisplayPrefs } from '@/src/display/DisplayPrefsProvider';
+import { resolveChordColor } from '@/src/display/prefs';
 import { useTheme } from '@/src/theme';
 
 type Props = {
@@ -17,27 +20,73 @@ type Props = {
   fontSize?: number;
   onFontSizeChange?: (size: number) => void;
   onScrollBy?: (delta: number) => void;
+  compact?: boolean;
 };
 
-export function SongViewer({
-  document,
-  transpose = 0,
-  capo = 0,
-  hideChords = false,
-  autoScrollSeconds,
-  fontSize,
-  onFontSizeChange,
-}: Props) {
+export type SongViewerHandle = {
+  scrollToNextSection: () => void;
+};
+
+export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewer(
+  {
+    document,
+    transpose = 0,
+    capo = 0,
+    hideChords = false,
+    autoScrollSeconds,
+    fontSize,
+    onFontSizeChange,
+    compact = false,
+  },
+  ref,
+) {
   const { theme } = useTheme();
-  const chartSize = fontSize ?? theme.type.chart.fontSize;
-  const lyricLineHeight = Math.round(chartSize * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
-  // SBP: ChordLyricLine -> displayChord(chord, capo, keyShift) = shapes at keyShift-capo.
-  // Do NOT also run transposeDocument here (that was double-shifting chords).
+  const { prefs } = useDisplayPrefs();
+  const chartSize = fontSize ?? prefs.chartFontSize;
+  const chordColor = resolveChordColor(theme, prefs);
+  const chordScale = prefs.highContrast ? Math.max(prefs.chordFontScale, 1.08) : prefs.chordFontScale;
   const scrollRef = useRef<ScrollView>(null);
   const fontSizeRef = useRef(chartSize);
   fontSizeRef.current = chartSize;
   const [contentH, setContentH] = useState(1);
   const [layoutH, setLayoutH] = useState(1);
+  const scrollYRef = useRef(0);
+  const sectionYRef = useRef<Record<string, number>>({});
+  const lineRelYRef = useRef<Record<string, { sectionId: string; y: number }>>({});
+  const jumpYRef = useRef<Record<string, number>>({});
+
+  const targets = useMemo(() => chartJumpTargets(document), [document]);
+  const targetIds = useMemo(() => new Set(targets.map((t) => t.id)), [targets]);
+
+  const recomputeJumpY = () => {
+    const next: Record<string, number> = {};
+    for (const target of targets) {
+      if (target.kind === 'section') {
+        next[target.id] = sectionYRef.current[target.sectionId] ?? 0;
+        continue;
+      }
+      const rel = lineRelYRef.current[target.id];
+      next[target.id] = (sectionYRef.current[rel?.sectionId ?? target.sectionId] ?? 0) + (rel?.y ?? 0);
+    }
+    jumpYRef.current = next;
+  };
+
+  useImperativeHandle(ref, () => ({
+    scrollToNextSection() {
+      recomputeJumpY();
+      const ordered = targets
+        .map((target) => ({ ...target, y: jumpYRef.current[target.id] ?? 0 }))
+        .sort((a, b) => a.y - b.y);
+      if (!ordered.length) {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+        return;
+      }
+      const y = scrollYRef.current;
+      const next = ordered.find((target) => target.y > y + 36);
+      const dest = next ?? ordered[0];
+      scrollRef.current?.scrollTo({ y: Math.max(0, dest.y), animated: true });
+    },
+  }));
 
   useEffect(() => {
     if (autoScrollSeconds == null) return;
@@ -64,61 +113,124 @@ export function SongViewer({
       runOnJS(applyPinch)(event.scale);
     });
 
-  const scroll = (
-    <ScrollView
-      ref={scrollRef}
-      style={styles.fill}
-      contentContainerStyle={styles.container}
-      onContentSizeChange={(_, h) => setContentH(h)}
-      onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
-      {document.sections.map((section) => (
-        <View key={section.id} style={styles.section}>
-          {section.label ? (
-            <Text style={[styles.sectionLabel, { color: theme.muted, fontSize: theme.type.meta.fontSize }]}>
-              {section.label}
-            </Text>
-          ) : null}
-          {section.lines.map((line) => {
-            if (line.kind === 'blank') {
-              return <View key={line.id} style={styles.blank} />;
-            }
-            if (hideChords) {
-              return (
-                <Text
-                  key={line.id}
-                  style={[
-                    styles.lyricOnly,
-                    { fontSize: chartSize, lineHeight: lyricLineHeight, color: theme.text, fontWeight: theme.type.chart.fontWeight },
-                  ]}>
-                  {line.lyric ?? ''}
-                </Text>
-              );
-            }
-            if (section.kind === 'tab') {
-              return (
-                <Text key={line.id} style={[styles.tabLine, { fontSize: chartSize - 2, lineHeight: lyricLineHeight, color: theme.muted }]}>
-                  {line.lyric ?? ''}
-                </Text>
-              );
-            }
-            return (
-              <ChordLyricLine
-                key={line.id}
-                lyric={line.lyric ?? ''}
-                slots={line.slots}
-                transpose={transpose}
-                capo={capo}
-                fontSize={chartSize}
-              />
-            );
-          })}
-        </View>
-      ))}
-    </ScrollView>
-  );
+  return (
+    <GestureDetector gesture={pinch}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.fill}
+        scrollEnabled={!compact && (prefs.layoutMode !== 'auto' || contentH > layoutH + 8)}
+        contentContainerStyle={[
+          styles.container,
+          {
+            padding: prefs.chartPadding,
+            paddingBottom: compact ? prefs.chartPadding : Math.max(96, prefs.chartPadding + 76),
+          },
+        ]}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        onContentSizeChange={(_, h) => setContentH(h)}
+        onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
+        {document.sections.map((section) => (
+          <View
+            key={section.id}
+            style={styles.section}
+            onLayout={(e) => {
+              sectionYRef.current[section.id] = e.nativeEvent.layout.y;
+              recomputeJumpY();
+            }}>
+            {section.label && prefs.showSectionHeaders ? (
+              <Text style={[styles.sectionLabel, { color: theme.muted, fontSize: theme.type.meta.fontSize }]}>
+                {section.label}
+              </Text>
+            ) : null}
+            {section.lines.map((line) => {
+              const jumpWrap = targetIds.has(line.id);
+              const long = (line.lyric?.length ?? 0) > 42;
+              const lineSize =
+                (prefs.longLines === 'shrink' || (prefs.longLines === 'split' && !hideChords)) && long
+                  ? Math.round(chartSize * 0.86)
+                  : chartSize;
+              const lineHeight = Math.round(lineSize * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
+              const body = (() => {
+                if (line.kind === 'blank') {
+                  return <View style={styles.blank} />;
+                }
+                if (hideChords) {
+                  const parts =
+                    prefs.longLines === 'split' ? splitLyric(line.lyric ?? '') : [line.lyric ?? ''];
+                  return (
+                    <View>
+                      {parts.map((part, i) => (
+                        <Text
+                          key={`${line.id}-p${i}`}
+                          allowFontScaling={false}
+                          style={[
+                            styles.lyricOnly,
+                            {
+                              fontSize: lineSize,
+                              lineHeight,
+                              color: theme.text,
+                              fontWeight: theme.type.chart.fontWeight,
+                            },
+                          ]}>
+                          {part}
+                        </Text>
+                      ))}
+                    </View>
+                  );
+                }
+                if (section.kind === 'tab') {
+                  return (
+                    <Text
+                      allowFontScaling={false}
+                      style={[styles.tabLine, { fontSize: lineSize - 2, lineHeight, color: theme.muted }]}>
+                      {line.lyric ?? ''}
+                    </Text>
+                  );
+                }
+                return (
+                  <ChordLyricLine
+                    lyric={line.lyric ?? ''}
+                    slots={line.slots}
+                    transpose={transpose}
+                    capo={capo}
+                    fontSize={lineSize}
+                    chordColor={chordColor}
+                    chordScale={chordScale}
+                  />
+                );
+              })();
 
-  if (!onFontSizeChange) return scroll;
-  return <GestureDetector gesture={pinch}>{scroll}</GestureDetector>;
+              return (
+                <View
+                  key={line.id}
+                  onLayout={
+                    jumpWrap
+                      ? (e) => {
+                          lineRelYRef.current[line.id] = { sectionId: section.id, y: e.nativeEvent.layout.y };
+                          recomputeJumpY();
+                        }
+                      : undefined
+                  }>
+                  {body}
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </ScrollView>
+    </GestureDetector>
+  );
+});
+
+function splitLyric(lyric: string) {
+  if (lyric.length <= 42) return [lyric];
+  const mid = Math.ceil(lyric.length / 2);
+  const at = lyric.lastIndexOf(' ', mid);
+  const cut = at > 12 ? at : 42;
+  return [lyric.slice(0, cut).trimEnd(), lyric.slice(cut).trimStart()].filter(Boolean);
 }
 
 const styles = StyleSheet.create({

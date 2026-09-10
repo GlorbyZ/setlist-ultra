@@ -12,6 +12,7 @@ import 'react-native-reanimated';
 
 import { IncomingShare } from '@/src/components/IncomingShare';
 import { SplashGate } from '@/src/components/SplashGate';
+import { DisplayPrefsProvider } from '@/src/display/DisplayPrefsProvider';
 import { LibraryProvider } from '@/src/providers/LibraryProvider';
 import { AppThemeProvider, useTheme } from '@/src/theme';
 
@@ -41,12 +42,14 @@ export default function RootLayout() {
       <SafeAreaProvider>
       <ShareIntentProvider>
         <AppThemeProvider>
+          <DisplayPrefsProvider>
           <LibraryProvider>
             <SplashGate fontsReady={fontsReady}>
               <IncomingShare />
               <RootLayoutNav />
             </SplashGate>
           </LibraryProvider>
+          </DisplayPrefsProvider>
         </AppThemeProvider>
       </ShareIntentProvider>
       </SafeAreaProvider>
@@ -90,6 +93,7 @@ function RootLayoutNav() {
         <Stack.Screen name="setlist/[id]" options={{ title: 'Set' }} />
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Add songs' }} />
         <Stack.Screen name="groups" options={{ title: 'Groups' }} />
+        <Stack.Screen name="look" options={{ title: 'Look & Stage' }} />
       </Stack>
     </ThemeProvider>
   );
