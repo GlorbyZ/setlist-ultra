@@ -69,7 +69,7 @@ export function PressableScale({
         onPressOut?.(e);
       }}
       {...rest}>
-      <Animated.View style={animatedStyle}>{children}</Animated.View>
+      <Animated.View style={[animatedStyle, { width: '100%' }]}>{children}</Animated.View>
     </Pressable>
   );
 }

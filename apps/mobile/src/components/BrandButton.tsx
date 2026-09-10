@@ -1,9 +1,8 @@
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { Text } from '@/components/Themed';
 import { PressableScale } from '@/src/motion';
-import { BRAND_GRADIENT, useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
   label: string;
@@ -18,6 +17,7 @@ export function BrandButton({ label, onPress, disabled, busy, compact }: Props) 
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const inactive = disabled && !busy;
+  const gradient = theme.gradient;
 
   return (
     <PressableScale
@@ -26,15 +26,15 @@ export function BrandButton({ label, onPress, disabled, busy, compact }: Props) 
       style={[styles.wrap, compact && styles.wrapCompact]}
       scaleTo={0.97}>
       {inactive ? (
-        <View style={[styles.gradient, styles.disabledFill]}>
+        <View style={[styles.face, styles.disabledFill]}>
           <Text style={styles.disabledLabel}>{label}</Text>
         </View>
       ) : (
         <LinearGradient
-          colors={[...BRAND_GRADIENT]}
+          colors={[...gradient]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={[styles.gradient, busy && styles.busy]}>
+          style={[styles.face, busy && styles.busy]}>
           {busy ? (
             <ActivityIndicator color={theme.accentText} />
           ) : (
@@ -48,12 +48,21 @@ export function BrandButton({ label, onPress, disabled, busy, compact }: Props) 
 
 function makeStyles(t: AppTheme) {
   return {
-    wrap: { marginBottom: 12 },
+    wrap: { marginBottom: 12, alignSelf: 'stretch' as const, width: '100%' as const },
     wrapCompact: { marginBottom: 0 },
-    gradient: { paddingVertical: 14, alignItems: 'center' as const, borderRadius: t.radius.md },
+    face: {
+      width: '100%' as const,
+      paddingVertical: 14,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      borderRadius: t.radius.md,
+      borderWidth: 1,
+      borderColor: 'transparent',
+      minHeight: 48,
+    },
     busy: { opacity: 0.85 },
     label: { color: t.accentText, fontWeight: '700' as const, fontSize: 16 },
-    disabledFill: { backgroundColor: t.panel, borderWidth: 1, borderColor: t.border },
+    disabledFill: { backgroundColor: t.panel, borderColor: t.border },
     disabledLabel: { color: t.faint, fontWeight: '700' as const, fontSize: 16 },
   };
 }

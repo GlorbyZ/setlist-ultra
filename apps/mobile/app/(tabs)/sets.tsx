@@ -57,7 +57,9 @@ export default function SetsScreen() {
           <BrandButton label="Retry" onPress={() => void refresh()} />
         </View>
       ) : loading && !refreshing ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={theme.accent} />
+        </View>
       ) : (
         <FlatList
           data={setlists}
@@ -99,6 +101,7 @@ export default function SetsScreen() {
 function makeStyles(t: AppTheme) {
   return {
     container: { flex: 1, backgroundColor: t.bg, padding: 16 },
+    loadingBox: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.bg, paddingTop: 40 },
     list: { paddingBottom: 40 },
     row: {
       backgroundColor: t.panel,
@@ -109,6 +112,7 @@ function makeStyles(t: AppTheme) {
       borderColor: t.border,
     },
     title: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },
+    // title/meta always from theme tokens
     meta: { color: t.muted, marginTop: 4, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight, fontWeight: t.type.meta.fontWeight },
     empty: { padding: 32, alignItems: 'center' as const },
     emptyTitle: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },

@@ -5,10 +5,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/Themed';
 import { isHostedConfigured } from '@/src/lib/config';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { BRAND_GRADIENT, useThemedStyles, type AppTheme } from '@/src/theme';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export function LibrarySwitcher({ onChanged }: { onChanged?: () => void }) {
   const { scope, orgs, setScope } = useLibrary();
+  const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const orgName = orgs.find((o) => o.id === scope.orgId)?.name;
   const hosted = isHostedConfigured();
@@ -23,6 +24,7 @@ export function LibrarySwitcher({ onChanged }: { onChanged?: () => void }) {
           onChanged?.();
         }}
         styles={styles}
+        gradient={theme.gradient}
       />
       {orgs.map((org) => (
         <Chip
@@ -34,6 +36,7 @@ export function LibrarySwitcher({ onChanged }: { onChanged?: () => void }) {
             onChanged?.();
           }}
           styles={styles}
+          gradient={theme.gradient}
         />
       ))}
       <Link href={'/groups' as Href} asChild>
@@ -50,16 +53,18 @@ function Chip({
   on,
   onPress,
   styles,
+  gradient,
 }: {
   label: string;
   on: boolean;
   onPress: () => void;
   styles: ReturnType<typeof makeStyles>;
+  gradient: readonly [string, string, string];
 }) {
   if (on) {
     return (
       <Pressable onPress={onPress}>
-        <LinearGradient colors={[...BRAND_GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.chipOn}>
+        <LinearGradient colors={[...gradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.chipOn}>
           <Text style={styles.chipOnText}>{label}</Text>
         </LinearGradient>
       </Pressable>

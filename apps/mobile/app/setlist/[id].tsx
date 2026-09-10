@@ -24,7 +24,7 @@ import {
   updateSetlist,
 } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
-import { BRAND_GRADIENT, useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
+import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SetlistItemRow, SetlistRow, SongRow } from '@setlist-ultra/db';
 
 export default function SetlistScreen() {
@@ -85,7 +85,13 @@ export default function SetlistScreen() {
     });
   };
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg }}>
+        <ActivityIndicator color={theme.accent} />
+      </View>
+    );
+  }
   if (!setlist) {
     return (
       <View style={styles.center}>
@@ -102,6 +108,9 @@ export default function SetlistScreen() {
       <Stack.Screen
         options={{
           title: setlist.title,
+          headerStyle: { backgroundColor: theme.bg },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text, fontWeight: '700' },
           headerRight: () => (
             <View style={styles.headerActions}>
               <Pressable onPress={() => setAddOpen(true)} accessibilityLabel="Add" hitSlop={8}>
@@ -140,7 +149,7 @@ export default function SetlistScreen() {
               onPress={() => void playItem(item, index)}
               onLongPress={() => confirmRemove(item)}>
               {index === activeIndex ? (
-                <LinearGradient colors={[...BRAND_GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.selectedBar} />
+                <LinearGradient colors={[...theme.gradient]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.selectedBar} />
               ) : (
                 <View style={styles.selectedBarSpacer} />
               )}

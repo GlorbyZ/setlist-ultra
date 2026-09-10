@@ -35,7 +35,7 @@ export default function RootLayout() {
   const fontsReady = loaded || Boolean(error);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000000' }}>
       <SafeAreaProvider>
       <ShareIntentProvider>
         <AppThemeProvider>
@@ -73,7 +73,14 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={navTheme}>
       <StatusBar style={theme.id === 'ultra-light' ? 'dark' : 'light'} />
-      <Stack>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.bg },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text, fontWeight: '700' },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: theme.bg },
+        }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="song/[id]" options={{ title: '', headerShadowVisible: false }} />
         <Stack.Screen name="editor/[id]" options={{ title: 'Editor' }} />
