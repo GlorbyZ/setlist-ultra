@@ -34,12 +34,32 @@ export type HostedOrg = {
   created_at: string;
 };
 
-export function createHostedClient(url: string, anonKey: string): SupabaseClient {
+export type HostedAuthStorage = {
+  getItem: (key: string) => string | null | Promise<string | null>;
+  setItem: (key: string, value: string) => void | Promise<void>;
+  removeItem: (key: string) => void | Promise<void>;
+};
+
+export type CreateHostedClientOptions = {
+  storage?: HostedAuthStorage;
+  /** Default true on web; set false for React Native. */
+  detectSessionInUrl?: boolean;
+  /** Prefer pkce for native OAuth redirects. */
+  flowType?: 'pkce' | 'implicit';
+};
+
+export function createHostedClient(
+  url: string,
+  anonKey: string,
+  options?: CreateHostedClientOptions,
+): SupabaseClient {
   return createClient(url, anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: options?.detectSessionInUrl ?? true,
+      storage: options?.storage,
+      flowType: options?.flowType,
     },
   });
 }

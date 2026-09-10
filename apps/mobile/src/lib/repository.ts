@@ -791,22 +791,26 @@ export async function getSyncState() {
 
 export async function saveSyncState(data: {
   provider: string;
-  accountEmail?: string;
-  accessToken?: string;
-  refreshToken?: string;
-  tokenExpiry?: string;
+  /** Pass null to clear; omit/undefined to keep existing on update. */
+  accountEmail?: string | null;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  tokenExpiry?: string | null;
 }) {
   const db = await getDatabase();
   const existing = await getSyncState();
+  const merge = <T,>(next: T | null | undefined, prev: T | null | undefined) =>
+    next === undefined ? (prev ?? undefined) : (next ?? undefined);
+
   if (existing) {
     await db
       .update(syncState)
       .set({
         provider: data.provider,
-        accountEmail: data.accountEmail,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        tokenExpiry: data.tokenExpiry,
+        accountEmail: merge(data.accountEmail, existing.accountEmail),
+        accessToken: merge(data.accessToken, existing.accessToken),
+        refreshToken: merge(data.refreshToken, existing.refreshToken),
+        tokenExpiry: merge(data.tokenExpiry, existing.tokenExpiry),
         lastSyncAt: now(),
       })
       .where(eq(syncState.id, 'default'));
@@ -815,10 +819,10 @@ export async function saveSyncState(data: {
   await db.insert(syncState).values({
     id: 'default',
     provider: data.provider,
-    accountEmail: data.accountEmail,
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    tokenExpiry: data.tokenExpiry,
+    accountEmail: data.accountEmail ?? undefined,
+    accessToken: data.accessToken ?? undefined,
+    refreshToken: data.refreshToken ?? undefined,
+    tokenExpiry: data.tokenExpiry ?? undefined,
     lastSyncAt: now(),
   });
 }

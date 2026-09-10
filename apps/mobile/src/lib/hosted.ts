@@ -1,10 +1,16 @@
-import { createHostedClient, type HostedChart } from '@setlist-ultra/api';
+﻿import { createHostedClient, type HostedChart } from '@setlist-ultra/api';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as Linking from 'expo-linking';
+import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
 import { config, isHostedConfigured } from './config';
 import {
   createOrg,
   findChartByHash,
   findOrCreateChart,
   getLibraryScope,
+  getSyncState,
   insertLibrarySong,
   listOrgs,
   listSongs,
@@ -14,15 +20,75 @@ import {
   updateSong,
 } from './repository';
 import { getDatabase } from './db';
-import { orgs, songs } from '@setlist-ultra/db';
+import { orgs } from '@setlist-ultra/db';
 import { eq } from 'drizzle-orm';
 
+WebBrowser.maybeCompleteAuthSession();
+
+const ExpoSecureStoreAdapter = {
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+};
+
 let client: ReturnType<typeof createHostedClient> | null = null;
+let restoreAttempted = false;
+
+/** Deep-link redirect for Supabase OAuth. Must be allow-listed in the dashboard. */
+export function getAuthRedirectUri() {
+  return makeRedirectUri({
+    scheme: 'setlistultra',
+    path: 'auth/callback',
+  });
+}
+
+export function isGoogleAuthConfigured(): boolean {
+  return Boolean(config.googleWebClientId.trim());
+}
 
 export function getHostedClient() {
   if (!isHostedConfigured()) return null;
-  if (!client) client = createHostedClient(config.supabaseUrl, config.supabaseAnonKey);
+  if (!client) {
+    client = createHostedClient(config.supabaseUrl, config.supabaseAnonKey, {
+      storage: ExpoSecureStoreAdapter,
+      detectSessionInUrl: false,
+      flowType: 'pkce',
+    });
+  }
   return client;
+}
+
+async function persistSupabaseSession(email?: string | null, accessToken?: string | null, refreshToken?: string | null) {
+  await saveSyncState({
+    provider: 'supabase',
+    accountEmail: email ?? undefined,
+    accessToken: accessToken ?? undefined,
+    refreshToken: refreshToken ?? undefined,
+  });
+}
+
+async function restoreSessionIfNeeded() {
+  const supabase = getHostedClient();
+  if (!supabase || restoreAttempted) return;
+  restoreAttempted = true;
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return;
+  const state = await getSyncState();
+  if (state?.provider !== 'supabase' || !state.accessToken || !state.refreshToken) return;
+  const { error } = await supabase.auth.setSession({
+    access_token: state.accessToken,
+    refresh_token: state.refreshToken,
+  });
+  if (error) {
+    // Stale local tokens — fall back to signed-out.
+    await saveSyncState({
+      provider: 'local',
+      accountEmail: null,
+      accessToken: null,
+      refreshToken: null,
+      tokenExpiry: null,
+    });
+  }
 }
 
 export async function hostedSignIn(email: string, password: string) {
@@ -30,7 +96,7 @@ export async function hostedSignIn(email: string, password: string) {
   if (!supabase) throw new Error('Hosted sync is not configured. Add EXPO_PUBLIC_SUPABASE_URL and ANON key.');
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
-  await saveSyncState({ provider: 'supabase', accountEmail: email, accessToken: data.session?.access_token });
+  await persistSupabaseSession(email, data.session?.access_token, data.session?.refresh_token);
   return data.user;
 }
 
@@ -40,20 +106,106 @@ export async function hostedSignUp(email: string, password: string) {
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw error;
   if (data.session) {
-    await saveSyncState({ provider: 'supabase', accountEmail: email, accessToken: data.session.access_token });
+    await persistSupabaseSession(email, data.session.access_token, data.session.refresh_token);
   }
   return data.user;
+}
+
+/**
+ * Google via Supabase Auth OAuth (browser + deep link).
+ * Uses the Web client ID configured in Supabase Auth → Google (same value as EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID).
+ * Native Android client ID is optional for this flow; needed later for Google Sign-In SDK / Drive.
+ */
+export async function hostedSignInWithGoogle() {
+  const supabase = getHostedClient();
+  if (!supabase) throw new Error('Hosted sync is not configured. Add EXPO_PUBLIC_SUPABASE_URL and ANON key.');
+  if (!isGoogleAuthConfigured()) {
+    throw new Error('Google sign-in needs EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (and the same Client ID in Supabase Auth → Google).');
+  }
+
+  const redirectTo = getAuthRedirectUri();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'select_account',
+      },
+    },
+  });
+  if (error) throw error;
+  if (!data.url) throw new Error('Could not start Google sign-in.');
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success' || !result.url) {
+    if (result.type === 'cancel' || result.type === 'dismiss') {
+      throw new Error('Google sign-in cancelled.');
+    }
+    throw new Error('Google sign-in did not complete.');
+  }
+
+  const session = await createSessionFromUrl(result.url);
+  if (!session) throw new Error('Google sign-in returned no session. Check Supabase redirect allow-list.');
+  await persistSupabaseSession(session.user.email, session.access_token, session.refresh_token);
+  return session.user;
+}
+
+async function createSessionFromUrl(url: string) {
+  const supabase = getHostedClient();
+  if (!supabase) return null;
+
+  const { params, errorCode } = QueryParams.getQueryParams(url);
+  if (errorCode) throw new Error(String(errorCode));
+
+  const access_token = typeof params.access_token === 'string' ? params.access_token : undefined;
+  const refresh_token = typeof params.refresh_token === 'string' ? params.refresh_token : undefined;
+  const code = typeof params.code === 'string' ? params.code : undefined;
+
+  if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return data.session;
+  }
+
+  if (access_token) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token,
+      refresh_token: refresh_token ?? '',
+    });
+    if (error) throw error;
+    return data.session;
+  }
+
+  // Fallback: Linking.parse when QueryParams missed hash fragments on some platforms.
+  const parsed = Linking.parse(url);
+  const qp = parsed.queryParams ?? {};
+  const fallbackCode = typeof qp.code === 'string' ? qp.code : undefined;
+  if (fallbackCode) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(fallbackCode);
+    if (error) throw error;
+    return data.session;
+  }
+
+  return null;
 }
 
 export async function hostedSignOut() {
   const supabase = getHostedClient();
   await supabase?.auth.signOut();
-  await saveSyncState({ provider: 'local', accountEmail: undefined });
+  await saveSyncState({
+    provider: 'local',
+    accountEmail: null,
+    accessToken: null,
+    refreshToken: null,
+    tokenExpiry: null,
+  });
 }
 
 export async function hostedSessionEmail(): Promise<string | null> {
   const supabase = getHostedClient();
   if (!supabase) return null;
+  await restoreSessionIfNeeded();
   const { data } = await supabase.auth.getUser();
   return data.user?.email ?? null;
 }
@@ -115,6 +267,7 @@ export async function pushChartToHost(input: {
 export async function syncPersonalLibrary() {
   const supabase = getHostedClient();
   if (!supabase) throw new Error('Sign in to hosted sync first.');
+  await restoreSessionIfNeeded();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) throw new Error('Not signed in.');
@@ -206,6 +359,7 @@ export async function syncPersonalLibrary() {
 export async function syncOrgFromHost(inviteCode: string) {
   const supabase = getHostedClient();
   if (!supabase) throw new Error('Hosted sync is not configured.');
+  await restoreSessionIfNeeded();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error('Not signed in.');
 
@@ -239,6 +393,7 @@ export async function createHostedOrg(name: string) {
   const supabase = getHostedClient();
   const local = await createOrg(name);
   if (!supabase) return local;
+  await restoreSessionIfNeeded();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return local;
   const { data, error } = await supabase
@@ -280,6 +435,7 @@ export async function removeHostedMember(remoteOrgId: string, userId: string) {
 export async function leaveHostedOrg(remoteOrgId: string) {
   const supabase = getHostedClient();
   if (!supabase) return;
+  await restoreSessionIfNeeded();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return;
   await removeHostedMember(remoteOrgId, data.user.id);

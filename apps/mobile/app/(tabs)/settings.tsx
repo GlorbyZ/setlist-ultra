@@ -9,10 +9,13 @@ import { config, isHostedConfigured } from '@/src/lib/config';
 import { cleanDuplicateSongs, exportSbpBytes } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
 import {
+  getAuthRedirectUri,
   hostedSessionEmail,
   hostedSignIn,
+  hostedSignInWithGoogle,
   hostedSignOut,
   hostedSignUp,
+  isGoogleAuthConfigured,
   syncPersonalLibrary,
 } from '@/src/lib/hosted';
 import { managerClientHint, pushSnapshotToManager } from '@/src/lib/manager';
@@ -23,6 +26,7 @@ export default function SettingsScreen() {
   const { refresh } = useLibrary();
   const styles = useThemedStyles(makeStyles);
   const hosted = isHostedConfigured();
+  const googleReady = isGoogleAuthConfigured();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -70,21 +74,24 @@ export default function SettingsScreen() {
       <Text style={styles.heading}>Sync</Text>
       {hosted ? (
         <>
-          <Text style={styles.body}>Cloud backup when signed in.</Text>
+          <Text style={styles.body}>Cloud backup when signed in (email or Google).</Text>
           <Text style={styles.status}>{status}</Text>
           {sessionEmail ? (
-            <Pressable
-              style={styles.ghost}
-              disabled={busy}
-              onPress={() =>
-                void run(async () => {
-                  await hostedSignOut();
-                  setSessionEmail(null);
-                  setStatus('Signed out · local only');
-                })
-              }>
-              <Text style={styles.ghostText}>Sign out</Text>
-            </Pressable>
+            <>
+              <Text style={styles.signedIn}>{sessionEmail}</Text>
+              <Pressable
+                style={styles.ghost}
+                disabled={busy}
+                onPress={() =>
+                  void run(async () => {
+                    await hostedSignOut();
+                    setSessionEmail(null);
+                    setStatus('Signed out · local only');
+                  })
+                }>
+                <Text style={styles.ghostText}>Sign out</Text>
+              </Pressable>
+            </>
           ) : (
             <View style={styles.card}>
               <TextInput
@@ -126,6 +133,31 @@ export default function SettingsScreen() {
                 }>
                 <Text style={styles.ghostText}>Create account</Text>
               </Pressable>
+              {googleReady ? (
+                <BrandButton
+                  label="Continue with Google"
+                  busy={busy}
+                  onPress={() =>
+                    void run(async () => {
+                      const user = await hostedSignInWithGoogle();
+                      const signed = user.email ?? 'Google account';
+                      setSessionEmail(signed);
+                      setStatus(`Signed in as ${signed}`);
+                    })
+                  }
+                />
+              ) : (
+                <Text style={styles.cardBody}>
+                  Google sign-in needs EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (and the same Client ID in Supabase Auth →
+                  Google).
+                </Text>
+              )}
+              {!config.googleAndroidClientId.trim() ? (
+                <Text style={styles.cardBody}>
+                  Android native client ID is empty — web OAuth + Expo redirect still works. Add
+                  EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID for native Google Sign-In / Drive later.
+                </Text>
+              ) : null}
             </View>
           )}
           <BrandButton
@@ -139,14 +171,15 @@ export default function SettingsScreen() {
               })
             }
           />
+          <Text style={styles.meta}>OAuth redirect: {getAuthRedirectUri()}</Text>
         </>
       ) : (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Cloud sync is off.</Text>
           <Text style={styles.cardBody}>Using this device only. Songs stay on this phone.</Text>
           <Text style={styles.cardBody}>
-            To show Sign in / Sync now, set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY
-            in apps/mobile/.env and rebuild the app.
+            To show Sign in / Sync now, set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in
+            apps/mobile/.env and restart Metro.
           </Text>
         </View>
       )}
@@ -234,6 +267,8 @@ function makeStyles(t: AppTheme) {
     heading: { color: t.text, fontSize: t.type.title.fontSize + 2, lineHeight: t.type.title.lineHeight + 2, fontWeight: t.type.title.fontWeight, marginBottom: 8, marginTop: 12 },
     body: { color: t.muted, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight, marginBottom: 12 },
     status: { color: t.accent, marginBottom: 16, fontWeight: '600' as const },
+    signedIn: { color: t.text, fontWeight: '700' as const, marginBottom: 4 },
+    meta: { color: t.faint, fontSize: 11, marginBottom: 12 },
     themeRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginBottom: 8 },
     themeChip: {
       flexDirection: 'row' as const,
