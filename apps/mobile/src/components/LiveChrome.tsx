@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
 import { actionFromKey, type PedalAction } from '@/src/lib/pedals';
-import { MOTION_FAST, MOTION_MED } from '@/src/motion';
+import { MOTION_FAST, MOTION_MED, PressableScale } from '@/src/motion';
 import { BRAND_GRADIENT, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
@@ -106,6 +106,7 @@ export function LiveChrome({
           </Text>
           {metaLine ? (
             <Pressable
+              unstable_pressDelay={0}
               disabled={!onCapo}
               onPress={() => {
                 if (!onCapo) return;
@@ -132,59 +133,64 @@ export function LiveChrome({
       <Animated.View
         pointerEvents="box-none"
         style={[styles.overlay, { paddingBottom: bottomPad }, overlayStyle]}>
-        <Pressable onPress={bump} style={styles.overlayHit} accessibilityLabel="Show live controls">
+        <Pressable unstable_pressDelay={0} onPress={bump} style={styles.overlayHit} accessibilityLabel="Show live controls">
           {open ? (
             <View style={styles.toolsCard}>
               <View style={styles.tools}>
                 {onPrev ? (
-                  <Pressable
+                  <PressableScale
                     style={styles.tool}
+                    scaleTo={0.94}
                     onPress={() => {
                       bump();
                       onPrev();
                     }}>
                     <Text style={styles.toolText}>Prev</Text>
-                  </Pressable>
+                  </PressableScale>
                 ) : null}
                 {onNext ? (
-                  <Pressable
+                  <PressableScale
                     style={styles.tool}
+                    scaleTo={0.94}
                     onPress={() => {
                       bump();
                       onNext();
                     }}>
                     <Text style={styles.toolText}>Next</Text>
-                  </Pressable>
+                  </PressableScale>
                 ) : null}
                 {onZoom ? (
                   <>
-                    <Pressable
+                    <PressableScale
                       style={styles.tool}
+                      scaleTo={0.94}
                       onPress={() => {
                         bump();
                         onZoom(-1);
                       }}>
                       <Text style={styles.toolText}>Zoom −</Text>
-                    </Pressable>
-                    <Pressable
+                    </PressableScale>
+                    <PressableScale
                       style={styles.tool}
+                      scaleTo={0.94}
                       onPress={() => {
                         bump();
                         onZoom(1);
                       }}>
                       <Text style={styles.toolText}>Zoom +</Text>
-                    </Pressable>
+                    </PressableScale>
                   </>
                 ) : null}
                 {onToggleScroll ? (
-                  <Pressable
+                  <PressableScale
                     style={styles.tool}
+                    scaleTo={0.94}
                     onPress={() => {
                       bump();
                       onToggleScroll();
                     }}>
                     <Text style={styles.toolText}>{scrolling ? 'Stop' : 'Scroll'}</Text>
-                  </Pressable>
+                  </PressableScale>
                 ) : null}
                 {tempo ? (
                   <View style={styles.tool}>
@@ -193,83 +199,90 @@ export function LiveChrome({
                 ) : null}
                 {onCapo ? (
                   <>
-                    <Pressable
+                    <PressableScale
                       style={styles.tool}
+                      scaleTo={0.94}
                       onPress={() => {
                         bump();
                         onCapo(-1);
                       }}>
                       <Text style={styles.toolText}>Capo −</Text>
-                    </Pressable>
-                    <Pressable
+                    </PressableScale>
+                    <PressableScale
                       style={styles.tool}
+                      scaleTo={0.94}
                       onPress={() => {
                         bump();
                         onCapo(1);
                       }}>
                       <Text style={styles.toolText}>Capo +</Text>
-                    </Pressable>
+                    </PressableScale>
                   </>
                 ) : null}
                 {onTranspose ? (
                   <>
-                    <Pressable
+                    <PressableScale
                       style={styles.tool}
+                      scaleTo={0.94}
                       onPress={() => {
                         bump();
                         onTranspose(-1);
                       }}>
                       <Text style={styles.toolText}>Key −</Text>
-                    </Pressable>
-                    <Pressable
+                    </PressableScale>
+                    <PressableScale
                       style={styles.tool}
+                      scaleTo={0.94}
                       onPress={() => {
                         bump();
                         onTranspose(1);
                       }}>
                       <Text style={styles.toolText}>Key +</Text>
-                    </Pressable>
+                    </PressableScale>
                   </>
                 ) : null}
                 {onToggleLyrics ? (
-                  <Pressable
+                  <PressableScale
                     style={styles.tool}
+                    scaleTo={0.94}
                     onPress={() => {
                       bump();
                       onToggleLyrics();
                     }}>
                     <Text style={styles.toolText}>{lyricsOnly ? 'Chords' : 'Lyrics'}</Text>
-                  </Pressable>
+                  </PressableScale>
                 ) : null}
                 {onEdit ? (
-                  <Pressable
+                  <PressableScale
                     style={styles.tool}
+                    scaleTo={0.94}
                     onPress={() => {
                       bump();
                       onEdit();
                     }}>
                     <Text style={styles.toolText}>Edit</Text>
-                  </Pressable>
+                  </PressableScale>
                 ) : null}
-                <Pressable style={styles.tool} onPress={() => setOpen(false)}>
+                <PressableScale style={styles.tool} scaleTo={0.94} onPress={() => setOpen(false)}>
                   <Text style={styles.toolText}>Done</Text>
-                </Pressable>
+                </PressableScale>
               </View>
             </View>
           ) : (
-            <Pressable
+            <PressableScale
               onPress={() => {
                 setOpen(true);
                 bump();
               }}
               style={styles.chipWrap}
+              scaleTo={0.94}
               accessibilityLabel="Live tools">
               <LinearGradient colors={[...BRAND_GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.chipBorder}>
                 <View style={styles.chipInner}>
                   <Text style={styles.chipText}>Live ▾</Text>
                 </View>
               </LinearGradient>
-            </Pressable>
+            </PressableScale>
           )}
         </Pressable>
       </Animated.View>

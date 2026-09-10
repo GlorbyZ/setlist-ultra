@@ -24,6 +24,7 @@ import {
   updateSetlist,
 } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
+import { PressableScale, pressedStyle } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SetlistItemRow, SetlistRow, SongRow } from '@setlist-ultra/db';
 
@@ -113,12 +114,12 @@ export default function SetlistScreen() {
           headerTitleStyle: { color: theme.text, fontWeight: '700' },
           headerRight: () => (
             <View style={styles.headerActions}>
-              <Pressable onPress={() => setAddOpen(true)} accessibilityLabel="Add" hitSlop={8}>
+              <PressableScale onPress={() => setAddOpen(true)} accessibilityLabel="Add" hitSlop={8} scaleTo={0.9}>
                 <Text style={styles.headerAction}>+</Text>
-              </Pressable>
-              <Pressable onPress={() => setMoreOpen(true)} accessibilityLabel="More" hitSlop={8}>
+              </PressableScale>
+              <PressableScale onPress={() => setMoreOpen(true)} accessibilityLabel="More" hitSlop={8} scaleTo={0.9}>
                 <Text style={styles.headerAction}>⋮</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           ),
         }}
@@ -140,12 +141,13 @@ export default function SetlistScreen() {
           <Swipeable
             overshootRight={false}
             renderRightActions={() => (
-              <Pressable style={styles.swipeRemove} onPress={() => confirmRemove(item)}>
+              <Pressable unstable_pressDelay={0} style={pressedStyle(styles.swipeRemove)} onPress={() => confirmRemove(item)}>
                 <Text style={styles.swipeRemoveText}>Remove</Text>
               </Pressable>
             )}>
             <Pressable
-              style={styles.row}
+              unstable_pressDelay={0}
+              style={pressedStyle(styles.row)}
               onPress={() => void playItem(item, index)}
               onLongPress={() => confirmRemove(item)}>
               {index === activeIndex ? (

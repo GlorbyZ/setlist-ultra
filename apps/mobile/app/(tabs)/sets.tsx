@@ -8,6 +8,7 @@ import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { formatDate } from '@/src/lib/format';
 import { createSetlist, setlistDuration } from '@/src/lib/repository';
+import { pressedStyle } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function SetsScreen() {
@@ -76,7 +77,8 @@ export default function SetsScreen() {
           }
           renderItem={({ item }) => (
             <Pressable
-              style={styles.row}
+              unstable_pressDelay={0}
+              style={pressedStyle(styles.row)}
               onPress={() => router.push(`/setlist/${item.id}`)}
               onLayout={() => {
                 if (durations[item.id] != null) return;

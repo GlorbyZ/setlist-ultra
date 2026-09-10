@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { SearchField } from '@/src/components/SearchField';
+import { PressableScale, pressedStyle } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
 
@@ -61,7 +62,8 @@ export function SongPickerModal({ visible, songs, excludeIds = [], onClose, onCo
             const on = Boolean(selected[item.id]);
             return (
               <Pressable
-                style={[styles.row, on && styles.rowOn]}
+                unstable_pressDelay={0}
+                style={pressedStyle([styles.row, on && styles.rowOn])}
                 onPress={() => setSelected((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}>
                 <View style={[styles.check, on && styles.checkOn]}>
                   {on ? <Text style={styles.checkMark}>✓</Text> : null}
@@ -85,9 +87,9 @@ export function SongPickerModal({ visible, songs, excludeIds = [], onClose, onCo
             close();
           }}
         />
-        <Pressable onPress={close} style={styles.cancelWrap}>
+        <PressableScale onPress={close} style={styles.cancelWrap} scaleTo={0.97}>
           <Text style={styles.cancel}>Cancel</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     </Modal>
   );

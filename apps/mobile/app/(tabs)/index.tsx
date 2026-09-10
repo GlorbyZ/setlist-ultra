@@ -21,7 +21,7 @@ import { SongsDrawer, SongsFilterPanel, type SongListId } from '@/src/components
 import { SongViewer } from '@/src/components/SongViewer';
 import { UgImportSheet } from '@/src/components/UgImportSheet';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { PressableScale, useReduceMotion } from '@/src/motion';
+import { PressableScale, pressedStyle, useReduceMotion } from '@/src/motion';
 import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
 import { addSongToSetlist, deleteSong, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
 import { groupUgResults, mergeUgHits, searchUgTabs, UG_PAGE_SIZE, type UgSearchHit, type UgSongGroup } from '@/src/lib/ug-api';
@@ -328,7 +328,7 @@ export default function SongsScreen() {
             }
             ListFooterComponent={
               loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : onlineNext && q && (localHits.length < MIN_LOCAL || wantOnline) ? (
-                <Pressable style={styles.loadMore} onPress={() => void runOnline(query, onlineNext, true)}>
+                <Pressable unstable_pressDelay={0} style={pressedStyle(styles.loadMore)} onPress={() => void runOnline(query, onlineNext, true)}>
                   <Text style={styles.loadMoreText}>Load more</Text>
                 </Pressable>
               ) : null
@@ -338,7 +338,7 @@ export default function SongsScreen() {
               if (item.kind === 'status') return <Text style={styles.status}>{item.text}</Text>;
               if (item.kind === 'action') {
                 return (
-                  <Pressable style={styles.ghost} onPress={() => { setWantOnline(true); void runOnline(query, 1); }}>
+                  <Pressable unstable_pressDelay={0} style={pressedStyle(styles.ghost)} onPress={() => { setWantOnline(true); void runOnline(query, 1); }}>
                     <Text style={styles.ghostText}>{item.label}</Text>
                   </Pressable>
                 );
@@ -346,7 +346,7 @@ export default function SongsScreen() {
               if (item.kind === 'online') {
                 const rating = item.group.rating != null ? `${item.group.rating.toFixed(1)}★` : null;
                 return (
-                  <Pressable style={styles.row} onPress={() => setImportGroup(item.group)}>
+                  <Pressable unstable_pressDelay={0} style={pressedStyle(styles.row)} onPress={() => setImportGroup(item.group)}>
                     <Text style={styles.title}>{item.group.songName}</Text>
                     <Text style={styles.meta}>
                       {item.group.artistName || 'Unknown artist'}
@@ -360,7 +360,8 @@ export default function SongsScreen() {
               const on = selecting && picked[song.id];
               return (
                 <Pressable
-                  style={[styles.row, selected?.id === song.id && split && styles.rowOn, on && styles.rowOn]}
+                  unstable_pressDelay={0}
+                  style={pressedStyle([styles.row, selected?.id === song.id && split && styles.rowOn, on && styles.rowOn])}
                   onPress={() => {
                     if (selecting) {
                       setPicked((prev) => ({ ...prev, [song.id]: !prev[song.id] }));
@@ -387,12 +388,12 @@ export default function SongsScreen() {
         <View style={styles.preview}>
           <View style={styles.previewBar}>
             <Text style={styles.previewTitle}>{selected.title}</Text>
-            <Pressable style={styles.ghostChip} onPress={() => router.push(`/song/${selected.id}`)}>
+            <PressableScale style={styles.ghostChip} scaleTo={0.94} onPress={() => router.push(`/song/${selected.id}`)}>
               <Text style={styles.ghostChipText}>Live</Text>
-            </Pressable>
-            <Pressable style={styles.ghostChip} onPress={() => router.push(`/editor/${selected.id}` as Href)}>
+            </PressableScale>
+            <PressableScale style={styles.ghostChip} scaleTo={0.94} onPress={() => router.push(`/editor/${selected.id}` as Href)}>
               <Text style={styles.ghostChipText}>Edit</Text>
-            </Pressable>
+            </PressableScale>
           </View>
           <SongViewer document={parseSongDocument(selected)} transpose={selected.keyShift ?? 0} capo={selected.capo ?? 0} />
         </View>

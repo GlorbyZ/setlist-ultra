@@ -24,7 +24,7 @@ export function BrandButton({ label, onPress, disabled, busy, compact }: Props) 
       onPress={onPress}
       disabled={disabled || busy}
       style={[styles.wrap, compact && styles.wrapCompact]}
-      scaleTo={0.97}>
+>
       {inactive ? (
         <View style={[styles.face, styles.disabledFill]}>
           <Text style={styles.disabledLabel}>{label}</Text>

@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AppState, Pressable, View } from 'react-native';
+import { AppState, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { BrandMark } from '@/src/components/BrandMark';
+import { PressableScale } from '@/src/motion';
 import { useTheme } from '@/src/theme';
 
 type SongsChromeValue = {
@@ -73,14 +74,15 @@ export function SongsHeaderRight() {
   const { menuOpen, toggleMenu } = useSongsChrome();
   return (
     <View style={{ paddingRight: 8, justifyContent: 'center' }}>
-      <Pressable
+      <PressableScale
         onPress={toggleMenu}
         hitSlop={10}
         style={{ paddingHorizontal: 4, paddingVertical: 4 }}
+        scaleTo={0.9}
         accessibilityRole="button"
         accessibilityLabel={menuOpen ? 'Close menu' : 'Open menu'}>
         <Ionicons name={menuOpen ? 'close' : 'menu'} size={26} color={theme.text} />
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }

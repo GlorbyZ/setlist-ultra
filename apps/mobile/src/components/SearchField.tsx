@@ -1,7 +1,8 @@
 import { useRef } from 'react';
-import { Pressable, TextInput, View, type TextInputProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { TextInput, View, type TextInputProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
+import { PressableScale } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
@@ -55,14 +56,15 @@ export function SearchField({
         accessibilityLabel={placeholder}
       />
       {value.length > 0 ? (
-        <Pressable
+        <PressableScale
           onPress={clear}
           hitSlop={10}
           style={styles.clearBtn}
+          scaleTo={0.88}
           accessibilityRole="button"
           accessibilityLabel="Clear search">
           <Ionicons name="close-circle" size={20} color={theme.muted} />
-        </Pressable>
+        </PressableScale>
       ) : null}
     </View>
   );

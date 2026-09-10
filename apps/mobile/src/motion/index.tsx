@@ -1,5 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  AccessibilityInfo,
+  Pressable,
+  type PressableProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -11,11 +17,16 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-/** Short branded springs — firm, not bouncy. */
-export const PRESS_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
-export const SNAP_SPRING = { damping: 22, stiffness: 280, mass: 0.8 } as const;
-export const MOTION_FAST = 160;
-export const MOTION_MED = 220;
+/** Firm <=150ms press — snappy, not mushy. */
+export const PRESS_SPRING = { damping: 36, stiffness: 650, mass: 0.35 } as const;
+export const SNAP_SPRING = { damping: 32, stiffness: 520, mass: 0.45 } as const;
+/** Preferred press settle window (ms). */
+export const PRESS_MS = 90;
+export const MOTION_FAST = 140;
+export const MOTION_MED = 200;
+
+/** Instant pressed opacity for list rows / scrollable hits (no transform). */
+export const PRESSED_OPACITY = 0.72;
 
 export function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
@@ -42,36 +53,67 @@ type PressScaleProps = PressableProps & {
   scaleTo?: number;
 };
 
-/** Subtle press feedback for buttons / icon hits. */
+/**
+ * Immediate press-in feedback (scale). Action still runs on press/pressOut.
+ * unstable_pressDelay forced to 0 so Android does not wait ~130ms before feedback.
+ * Reduce-motion: tiny opacity flash, no scale.
+ */
 export function PressableScale({
   children,
   style,
-  scaleTo = 0.97,
+  scaleTo = 0.96,
   disabled,
   onPressIn,
   onPressOut,
+  unstable_pressDelay,
   ...rest
 }: PressScaleProps) {
   const reduce = useReduceMotion();
   const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const opacity = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
 
   return (
     <Pressable
       disabled={disabled}
       style={style}
       onPressIn={(e) => {
-        if (!reduce && !disabled) scale.value = withSpring(scaleTo, PRESS_SPRING);
+        if (!disabled) {
+          if (reduce) {
+            opacity.value = withTiming(0.55, { duration: 1 });
+          } else {
+            scale.value = withSpring(scaleTo, PRESS_SPRING);
+          }
+        }
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        if (!reduce) scale.value = withSpring(1, PRESS_SPRING);
+        if (reduce) {
+          opacity.value = withTiming(1, { duration: PRESS_MS });
+        } else {
+          scale.value = withSpring(1, PRESS_SPRING);
+        }
         onPressOut?.(e);
       }}
-      {...rest}>
+      {...rest}
+      unstable_pressDelay={unstable_pressDelay ?? 0}>
       <Animated.View style={[animatedStyle, { width: '100%' }]}>{children}</Animated.View>
     </Pressable>
   );
+}
+
+/**
+ * Scroll-safe pressed style for FlatList/ScrollView rows.
+ * Opacity only — no transform that can fight gesture recognition.
+ */
+export function pressedStyle(
+  base?: StyleProp<ViewStyle>,
+  pressedExtra?: StyleProp<ViewStyle>,
+): PressableProps['style'] {
+  return ({ pressed }) => [base, pressed ? (pressedExtra ?? { opacity: PRESSED_OPACITY }) : null];
 }
 
 type ExpandProps = {
