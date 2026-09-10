@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,24 +11,20 @@ import {
 } from 'react-native';
 
 import { Text } from '@/components/Themed';
-import { assertUgTabMatchesRequest, fingerprintContent, normalizeUgTab, parseChordPro, type UgTabResponse } from '@setlist-ultra/core';
+import { fingerprintContent, parseChordPro } from '@setlist-ultra/core';
 import { BrandButton } from '@/src/components/BrandButton';
 import { SearchField } from '@/src/components/SearchField';
 import { BrandDialog } from '@/src/components/BrandDialog';
-import { SongViewer } from '@/src/components/SongViewer';
+import { UgImportSheet } from '@/src/components/UgImportSheet';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
 import {
   createBlankSong,
   importAnyChartFile,
   insertLibrarySong,
   saveSongFromUg,
 } from '@/src/lib/repository';
-import {
-  importUgTab,
-  searchUgTabs,
-  type UgSearchHit,
-  type UgSongGroup,
-} from '@/src/lib/ug-api';
+import { importUgTab, type UgSongGroup } from '@/src/lib/ug-api';
 import { config } from '@/src/lib/config';
 import { pickBinaryFile, pickImage } from '@/src/lib/files';
 import { lookupRemoteChart } from '@/src/lib/hosted';
@@ -41,24 +37,15 @@ export default function ImportScreen() {
   const styles = useThemedStyles(makeStyles);
   const [tab, setTab] = useState<'online' | 'paste' | 'file'>('online');
   const [query, setQuery] = useState('');
-  const [groups, setGroups] = useState<UgSongGroup[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<UgSongGroup | null>(null);
-  const [previewHit, setPreviewHit] = useState<UgSearchHit | null>(null);
-  const [previewTab, setPreviewTab] = useState<UgTabResponse | null>(null);
-  const [previewShift, setPreviewShift] = useState(0);
-  const [previewCapo, setPreviewCapo] = useState(0);
-  const [searching, setSearching] = useState(false);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [importGroup, setImportGroup] = useState<UgSongGroup | null>(null);
   const [directUrl, setDirectUrl] = useState('');
   const [paste, setPaste] = useState('');
   const [title, setTitle] = useState('Untitled');
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
 
-  const previewDoc = useMemo(
-    () => (previewTab && previewHit ? normalizeUgTab(previewTab, previewHit.url) : null),
-    [previewTab, previewHit],
-  );
+  // Same online engine as Songs tab search (debounce, group/rank, load-more, hide Official).
+  const online = useUgOnlineSearch(query, { enabled: tab === 'online', clearWhenDisabled: false });
 
   const afterImport = async (songId?: string) => {
     await refresh();
@@ -66,60 +53,16 @@ export default function ImportScreen() {
     else router.back();
   };
 
-  const runSearch = async () => {
-    const q = query.trim();
-    if (!q) return;
+  const submitSearch = () => {
     Keyboard.dismiss();
-    setSearching(true);
-    setSelectedGroup(null);
-    setPreviewHit(null);
-    setPreviewTab(null);
-    try {
-      const page = await searchUgTabs(q);
-      setGroups(page.groups);
-      if (!page.groups.length) setDialog({ title: 'No results', body: 'Try another search or paste a UG tab URL below.' });
-    } catch (error) {
-      setDialog({
-        title: 'Search failed',
-        body: `${error instanceof Error ? error.message : 'Unknown error'}\n\nProxy: ${config.ugProxyUrl}`,
-      });
-    } finally {
-      setSearching(false);
-    }
+    online.runSearch();
   };
 
-  const openVersion = async (hit: UgSearchHit) => {
-    setLoadingPreview(true);
-    setPreviewHit(null);
-    setPreviewTab(null);
-    setPreviewShift(0);
-    try {
-      const tabData = await importUgTab(hit.url);
-      assertUgTabMatchesRequest(tabData, hit.url, {
-        songName: hit.songName || selectedGroup?.songName,
-        artistName: hit.artistName || selectedGroup?.artistName,
-      });
-      setPreviewHit(hit);
-      setPreviewTab(tabData);
-      const capo = Number.parseInt(tabData.tab.capo ?? '0', 10);
-      setPreviewCapo(Number.isFinite(capo) ? capo : 0);
-    } catch (error) {
-      setPreviewHit(null);
-      setPreviewTab(null);
-      setDialog({
-        title: 'Preview failed',
-        body: error instanceof Error ? error.message : 'Could not open this version.',
-      });
-    } finally {
-      setLoadingPreview(false);
-    }
-  };
-
-  const importUrl = async (url: string, transpose = 0, capo?: number) => {
+  const importUrl = async (url: string) => {
     setBusy(true);
     try {
       const remote = await lookupRemoteChart(fingerprintContent(url), 'ultimate_guitar', url);
-      if (remote?.chordpro && !transpose) {
+      if (remote?.chordpro) {
         const songId = await insertLibrarySong({
           title: remote.title || 'Imported chart',
           artist: remote.artist || '',
@@ -133,8 +76,8 @@ export default function ImportScreen() {
         await afterImport(songId);
         return;
       }
-      const tabData = previewTab && previewHit?.url === url ? previewTab : await importUgTab(url);
-      const songId = await saveSongFromUg(tabData, url, { transpose, capo });
+      const tabData = await importUgTab(url);
+      const songId = await saveSongFromUg(tabData, url);
       await afterImport(songId);
     } catch (error) {
       setDialog({ title: 'Import failed', body: error instanceof Error ? error.message : 'Unknown error' });
@@ -251,100 +194,61 @@ export default function ImportScreen() {
               onChangeText={setQuery}
               placeholder="Song title or artist"
               style={{ flex: 1, marginBottom: 0 }}
-              onSubmitEditing={() => void runSearch()}
+              onSubmitEditing={submitSearch}
             />
-            <Pressable style={styles.searchButton} onPress={() => void runSearch()} disabled={searching}>
-              {searching ? <ActivityIndicator color={theme.accentText} /> : <Text style={styles.buttonText}>Go</Text>}
+            <Pressable style={styles.searchButton} onPress={submitSearch} disabled={online.status === 'searching'}>
+              {online.status === 'searching' ? (
+                <ActivityIndicator color={theme.accentText} />
+              ) : (
+                <Text style={styles.buttonText}>Go</Text>
+              )}
             </Pressable>
           </View>
 
           <View style={styles.onlineBody}>
-            {previewHit && previewDoc ? (
-              <View style={styles.previewCard}>
-                <Pressable onPress={() => { setPreviewHit(null); setPreviewTab(null); }}>
-                  <Text style={styles.ghostText}>← Versions</Text>
-                </Pressable>
-                <Text style={styles.resultTitle}>{previewDoc.meta.title}</Text>
-                <Text style={styles.resultUrl}>
-                  {previewDoc.meta.artist}
-                  {previewHit.type ? ` · ${previewHit.type}` : ''}
-                  {previewHit.key ? ` · ${previewHit.key}` : ''}
-                </Text>
-                <View style={styles.previewTools}>
-                  <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v - 1)}>
-                    <Text style={styles.toolText}>Key −</Text>
+            <FlatList
+              data={online.groups}
+              keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
+              onEndReachedThreshold={0.4}
+              onEndReached={() => online.loadMore()}
+              ListEmptyComponent={
+                online.status === 'searching' ? (
+                  <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} />
+                ) : online.status === 'error' ? (
+                  <Text style={styles.error}>
+                    {online.error || 'Search failed'}
+                    {`\n\nProxy: ${config.ugProxyUrl}`}
+                  </Text>
+                ) : online.status === 'empty' ? (
+                  <Text style={styles.label}>Nothing found. Try another search or paste a UG tab URL below.</Text>
+                ) : (
+                  <Text style={styles.label}>Search a title, then pick a song and a version.</Text>
+                )
+              }
+              ListFooterComponent={
+                online.loadingMore ? (
+                  <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} />
+                ) : online.nextPage && query.trim() ? (
+                  <Pressable style={styles.loadMore} onPress={() => online.loadMore()}>
+                    <Text style={styles.ghostText}>Load more</Text>
                   </Pressable>
-                  <Pressable style={styles.tool} onPress={() => setPreviewShift((v) => v + 1)}>
-                    <Text style={styles.toolText}>Key +</Text>
-                  </Pressable>
-                  <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => Math.max(0, v - 1))}>
-                    <Text style={styles.toolText}>Capo −</Text>
-                  </Pressable>
-                  <Pressable style={styles.tool} onPress={() => setPreviewCapo((v) => Math.min(12, v + 1))}>
-                    <Text style={styles.toolText}>Capo +</Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.label}>
-                  Shift {previewShift > 0 ? `+${previewShift}` : previewShift} · Capo {previewCapo}
-                </Text>
-                <View style={styles.previewStage}>
-                  <SongViewer document={previewDoc.document} transpose={previewShift} capo={previewCapo} fontSize={16} />
-                </View>
-                <BrandButton
-                  label="Add song"
-                  busy={busy}
-                  onPress={() => void importUrl(previewHit.url, previewShift, previewCapo)}
-                />
-              </View>
-            ) : selectedGroup ? (
-              <FlatList
-                data={selectedGroup.versions}
-                keyExtractor={(item) => item.url}
-                keyboardShouldPersistTaps="handled"
-                ListHeaderComponent={
-                  <View style={{ marginBottom: 8 }}>
-                    <Pressable onPress={() => setSelectedGroup(null)}>
-                      <Text style={styles.ghostText}>← Songs</Text>
-                    </Pressable>
-                    <Text style={styles.resultTitle}>{selectedGroup.songName}</Text>
-                    <Text style={styles.resultUrl}>
-                      {selectedGroup.artistName || 'Unknown artist'} · {selectedGroup.versions.length} version
-                      {selectedGroup.versions.length === 1 ? '' : 's'}
-                    </Text>
-                    {loadingPreview ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : null}
-                  </View>
-                }
-                renderItem={({ item }) => (
-                  <Pressable style={styles.result} onPress={() => void openVersion(item)}>
-                    <Text style={styles.resultTitle}>{item.type || 'Version'}</Text>
-                    <Text style={styles.resultUrl}>
-                      {[item.rating != null ? `${item.rating.toFixed(1)}★` : null, item.key].filter(Boolean).join(' · ') ||
-                        'Tap to preview'}
-                    </Text>
-                  </Pressable>
-                )}
-              />
-            ) : (
-              <FlatList
-                data={groups}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                ListEmptyComponent={
-                  searching ? null : (
-                    <Text style={styles.label}>Search a title, then pick a song and a version.</Text>
-                  )
-                }
-                renderItem={({ item }) => (
-                  <Pressable style={styles.result} onPress={() => setSelectedGroup(item)}>
+                ) : null
+              }
+              renderItem={({ item }) => {
+                const rating = item.rating != null ? `${item.rating.toFixed(1)}★` : null;
+                return (
+                  <Pressable style={styles.result} onPress={() => setImportGroup(item)}>
                     <Text style={styles.resultTitle}>{item.songName}</Text>
                     <Text style={styles.resultUrl}>
-                      {item.artistName || 'Unknown artist'} · {item.versions.length} version
-                      {item.versions.length === 1 ? '' : 's'}
+                      {item.artistName || 'Unknown artist'}
+                      {` · ${item.versions.length} version${item.versions.length === 1 ? '' : 's'}`}
+                      {rating ? ` · ${rating}` : ''}
                     </Text>
                   </Pressable>
-                )}
-              />
-            )}
+                );
+              }}
+            />
           </View>
 
           <Text style={styles.label}>Or paste tab URL</Text>
@@ -379,6 +283,15 @@ export default function ImportScreen() {
         </ScrollView>
       ) : null}
 
+      <UgImportSheet
+        group={importGroup}
+        onClose={() => setImportGroup(null)}
+        onImported={(songId) => {
+          void refresh();
+          router.replace(`/song/${songId}`);
+        }}
+      />
+
       <BrandDialog
         visible={Boolean(dialog)}
         title={dialog?.title ?? ''}
@@ -409,6 +322,7 @@ function makeStyles(t: AppTheme) {
     tabOn: { borderColor: t.accent, backgroundColor: t.panel },
     tabText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
     label: { color: t.muted, marginBottom: 8, fontWeight: '600' as const },
+    error: { color: t.danger, marginBottom: 8 },
     row: { flexDirection: 'row' as const, gap: 8, marginBottom: 12 },
     input: {
       backgroundColor: t.inputBg,
@@ -430,6 +344,7 @@ function makeStyles(t: AppTheme) {
     },
     ghost: { paddingVertical: 10, alignItems: 'center' as const },
     ghostText: { color: t.accent, fontWeight: '700' as const },
+    loadMore: { alignItems: 'center' as const, paddingVertical: 16 },
     result: {
       backgroundColor: t.panel,
       borderRadius: t.radius.md,
@@ -440,17 +355,5 @@ function makeStyles(t: AppTheme) {
     },
     resultTitle: { color: t.text, fontWeight: '700' as const },
     resultUrl: { color: t.faint, marginTop: 4, fontSize: 12 },
-    previewCard: { flex: 1, marginBottom: 8 },
-    previewTools: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginVertical: 12 },
-    tool: {
-      backgroundColor: t.panel,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: t.radius.sm,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    toolText: { color: t.text, fontWeight: '600' as const, fontSize: 13 },
-    previewStage: { flex: 1, minHeight: 180, borderWidth: 1, borderColor: t.border, borderRadius: t.radius.md, overflow: 'hidden' as const, marginBottom: 12 },
   };
 }

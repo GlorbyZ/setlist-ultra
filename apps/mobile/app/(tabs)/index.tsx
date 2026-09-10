@@ -1,5 +1,5 @@
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
@@ -23,8 +23,9 @@ import { UgImportSheet } from '@/src/components/UgImportSheet';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { PressableScale, pressedStyle, useReduceMotion } from '@/src/motion';
 import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
+import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
 import { addSongToSetlist, deleteSong, parseSongDocument, patchAppState, updateSong } from '@/src/lib/repository';
-import { groupUgResults, mergeUgHits, searchUgTabs, UG_PAGE_SIZE, type UgSearchHit, type UgSongGroup } from '@/src/lib/ug-api';
+import { type UgSongGroup } from '@/src/lib/ug-api';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
 
@@ -73,16 +74,10 @@ export default function SongsScreen() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState<'key' | 'tag' | 'artist' | 'source' | null>(null);
   const [dialog, setDialog] = useState<{ title: string; body?: string; songId?: string } | null>(null);
-  const [onlineHits, setOnlineHits] = useState<UgSearchHit[]>([]);
-  const [onlineNext, setOnlineNext] = useState<number | null>(null);
-  const [onlineStatus, setOnlineStatus] = useState<'idle' | 'searching' | 'ready' | 'empty' | 'error'>('idle');
-  const [onlineError, setOnlineError] = useState<string | null>(null);
   const [importGroup, setImportGroup] = useState<UgSongGroup | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [wantOnline, setWantOnline] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const reduceMotion = useReduceMotion();
-  const searchGen = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -143,56 +138,14 @@ export default function SongsScreen() {
     return scoped.filter((song) => matchesQuery(song, q));
   }, [scoped, q]);
 
-  const onlineGroups = useMemo(() => groupUgResults(onlineHits), [onlineHits]);
-
-  const runOnline = useCallback(async (raw: string, page: number, append = false) => {
-    const term = raw.trim();
-    if (!term) return;
-    const gen = ++searchGen.current;
-    if (page === 1) {
-      setOnlineStatus('searching');
-      setOnlineError(null);
-      if (!append) setOnlineHits([]);
-    } else {
-      setLoadingMore(true);
-    }
-    try {
-      const result = await searchUgTabs(term, { page, pageSize: UG_PAGE_SIZE });
-      if (gen !== searchGen.current) return;
-      setOnlineHits((prev) => (page === 1 && !append ? result.hits : mergeUgHits(prev, result.hits)));
-      setOnlineNext(result.nextPage);
-      setOnlineStatus(result.groups.length || result.hits.length ? 'ready' : 'empty');
-    } catch (err) {
-      if (gen !== searchGen.current) return;
-      setOnlineStatus('error');
-      setOnlineError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setLoadingMore(false);
-    }
-  }, []);
+  // Shared UG online engine (same as Add songs). Local-first: auto-search only when
+  // local matches are thin, or the user taps "Search online".
+  const onlineEnabled = Boolean(q) && (localHits.length < MIN_LOCAL || wantOnline);
+  const online = useUgOnlineSearch(query, { enabled: onlineEnabled, clearWhenDisabled: true });
 
   useEffect(() => {
-    const term = query.trim();
-    if (!term) {
-      searchGen.current += 1;
-      setOnlineHits([]);
-      setOnlineNext(null);
-      setOnlineStatus('idle');
-      setOnlineError(null);
-      setWantOnline(false);
-      return;
-    }
-    if (localHits.length >= MIN_LOCAL) {
-      if (!wantOnline) {
-        setOnlineHits([]);
-        setOnlineNext(null);
-        setOnlineStatus('idle');
-      }
-      return;
-    }
-    const handle = setTimeout(() => void runOnline(term, 1), 400);
-    return () => clearTimeout(handle);
-  }, [query, localHits.length, runOnline]);
+    if (!query.trim()) setWantOnline(false);
+  }, [query]);
 
   const rows: ListRow[] = useMemo(() => {
     const searching = q.length > 0;
@@ -205,25 +158,25 @@ export default function SongsScreen() {
       out.push({ kind: 'heading', id: 'local-h', title: 'In your library' });
       for (const song of localHits) out.push({ kind: 'local', song });
       out.push({ kind: 'action', id: 'search-online', label: 'Search online' });
-      if (onlineStatus === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
-      if (onlineStatus === 'error') out.push({ kind: 'status', id: 'err', text: onlineError || 'Search failed' });
-      if (onlineStatus === 'empty' && wantOnline) out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
-      if (wantOnline && onlineGroups.length) {
+      if (online.status === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
+      if (online.status === 'error') out.push({ kind: 'status', id: 'err', text: online.error || 'Search failed' });
+      if (online.status === 'empty' && wantOnline) out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
+      if (wantOnline && online.groups.length) {
         out.push({ kind: 'heading', id: 'online-h', title: 'Online' });
-        for (const group of onlineGroups) out.push({ kind: 'online', group });
+        for (const group of online.groups) out.push({ kind: 'online', group });
       }
     } else {
       out.push({ kind: 'status', id: 'no-local', text: 'No local matches' });
-      if (onlineStatus === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
-      if (onlineStatus === 'error') out.push({ kind: 'status', id: 'err', text: onlineError || 'Search failed' });
-      if (onlineStatus === 'empty') out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
-      if (onlineGroups.length) {
+      if (online.status === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
+      if (online.status === 'error') out.push({ kind: 'status', id: 'err', text: online.error || 'Search failed' });
+      if (online.status === 'empty') out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
+      if (online.groups.length) {
         out.push({ kind: 'heading', id: 'online-h', title: 'Online' });
-        for (const group of onlineGroups) out.push({ kind: 'online', group });
+        for (const group of online.groups) out.push({ kind: 'online', group });
       }
     }
     return out;
-  }, [q, localHits, onlineGroups, onlineStatus, onlineError, wantOnline]);
+  }, [q, localHits, online.groups, online.status, online.error, wantOnline]);
 
   const selected = localHits.find((s) => s.id === selectedId) ?? localHits[0];
   const selectedIds = Object.keys(picked).filter((id) => picked[id]);
@@ -238,7 +191,7 @@ export default function SongsScreen() {
     Keyboard.dismiss();
     const term = query.trim();
     if (!term) return;
-    if (localHits.length < MIN_LOCAL) void runOnline(term, 1);
+    if (localHits.length < MIN_LOCAL || wantOnline) online.runSearch(term);
   };
 
   return (
@@ -317,8 +270,8 @@ export default function SongsScreen() {
             onEndReachedThreshold={0.4}
             onEndReached={() => {
               const showOnline = q && (localHits.length < MIN_LOCAL || wantOnline);
-              if (!showOnline || !onlineNext || loadingMore || onlineStatus === 'searching') return;
-              void runOnline(query, onlineNext, true);
+              if (!showOnline) return;
+              online.loadMore();
             }}
             ListEmptyComponent={
               <View style={styles.empty}>
@@ -327,8 +280,8 @@ export default function SongsScreen() {
               </View>
             }
             ListFooterComponent={
-              loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : onlineNext && q && (localHits.length < MIN_LOCAL || wantOnline) ? (
-                <Pressable unstable_pressDelay={0} style={pressedStyle(styles.loadMore)} onPress={() => void runOnline(query, onlineNext, true)}>
+              online.loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={theme.accent} /> : online.nextPage && q && (localHits.length < MIN_LOCAL || wantOnline) ? (
+                <Pressable unstable_pressDelay={0} style={pressedStyle(styles.loadMore)} onPress={() => online.loadMore()}>
                   <Text style={styles.loadMoreText}>Load more</Text>
                 </Pressable>
               ) : null
@@ -338,7 +291,7 @@ export default function SongsScreen() {
               if (item.kind === 'status') return <Text style={styles.status}>{item.text}</Text>;
               if (item.kind === 'action') {
                 return (
-                  <Pressable unstable_pressDelay={0} style={pressedStyle(styles.ghost)} onPress={() => { setWantOnline(true); void runOnline(query, 1); }}>
+                  <Pressable unstable_pressDelay={0} style={pressedStyle(styles.ghost)} onPress={() => { setWantOnline(true); online.runSearch(query); }}>
                     <Text style={styles.ghostText}>{item.label}</Text>
                   </Pressable>
                 );
