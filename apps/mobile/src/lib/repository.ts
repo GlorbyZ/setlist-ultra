@@ -695,6 +695,40 @@ export async function deleteSetlist(id: string) {
   await db.update(setlists).set({ deleted: 1, updatedAt: now() }).where(eq(setlists.id, id));
 }
 
+export async function setlistDurations(setlistIds: string[]): Promise<Record<string, number>> {
+  const unique = [...new Set(setlistIds.filter(Boolean))];
+  const out: Record<string, number> = Object.fromEntries(unique.map((id) => [id, 0]));
+  if (!unique.length) return out;
+  const db = await getDatabase();
+  const items = await db
+    .select()
+    .from(setlistItems)
+    .where(and(inArray(setlistItems.setlistId, unique), eq(setlistItems.deleted, 0)));
+  const songIds = [...new Set(items.map((i) => i.songId).filter(Boolean) as string[])];
+  const rows = songIds.length
+    ? await db
+        .select({
+          id: songs.id,
+          duration2: songs.duration2,
+          durationSeconds: songs.durationSeconds,
+        })
+        .from(songs)
+        .where(inArray(songs.id, songIds))
+    : [];
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  for (const item of items) {
+    const id = item.setlistId;
+    if (!(id in out)) continue;
+    if (item.itemType === 'timer') {
+      out[id] += item.timerSeconds ?? 0;
+      continue;
+    }
+    const song = item.songId ? byId[item.songId] : null;
+    out[id] += song?.duration2 ?? song?.durationSeconds ?? 0;
+  }
+  return out;
+}
+
 export async function setlistDuration(setlistId: string): Promise<number> {
   const items = await getSetlistItems(setlistId);
   const songIds = items.map((i) => i.songId).filter(Boolean) as string[];

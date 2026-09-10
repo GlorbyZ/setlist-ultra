@@ -97,10 +97,52 @@ export function transposeDocument(document: SongDocument, semitones: number): So
   };
 }
 
-export function displayChord(chord: string, capo: number, semitones: number): string {
-  const capoSemitones = capo > 0 ? -capo : 0;
-  return transposeChord(chord, semitones + capoSemitones);
+/**
+ * Songbook Pro display formula (shapes vs concert key):
+ *   shapes = transpose(writtenChord, keyShift - capo)
+ * - keyShift moves concert/sounding pitch (and shapes with it)
+ * - capo only reshapes for guitar; sounding key is unchanged
+ * Never fold capo into keyShift - they are different jobs.
+ */
+export function displayChord(chord: string, capo: number, keyShift: number): string {
+  const fret = capo > 0 ? capo : 0;
+  return transposeChord(chord, keyShift - fret);
 }
+
+/** Concert/sounding key = written originalKey + keyShift (capo ignored). */
+export function soundingKeyName(
+  originalKey: string | null | undefined,
+  keyShift = 0,
+): string | undefined {
+  const shifted = transposeKeyName(originalKey, keyShift);
+  if (shifted) return shifted;
+  const trimmed = originalKey?.trim();
+  return trimmed || undefined;
+}
+
+/** Semitone keyShift so sounding key becomes targetKey (relative to written originalKey). */
+export function keyShiftForTargetKey(
+  originalKey: string | null | undefined,
+  targetKey: string,
+  currentKeyShift = 0,
+): number {
+  const from = tonicChromaticIndex(originalKey);
+  const to = tonicChromaticIndex(targetKey);
+  if (from == null || to == null) return currentKeyShift;
+  return wrapSemitones(to - from);
+}
+
+/** Chromatic index matching SBP order (0 = A ... 11 = G#). */
+function tonicChromaticIndex(name: string | null | undefined): number | null {
+  const parsed = parseKeyName(name);
+  if (!parsed) return null;
+  const chroma = Note.chroma(parsed.tonic);
+  if (chroma == null) return null;
+  // Note.chroma: C=0 ... B=11; SBP: A=0 => (chroma - 9 + 12) % 12
+  return wrapSemitones(chroma - 9);
+}
+
+export const CAPO_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
 export function isLikelyChord(token: string): boolean {
   return CHORD_RE.test(token.trim());

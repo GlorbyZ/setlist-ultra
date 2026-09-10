@@ -7,7 +7,7 @@ import { Text } from '@/components/Themed';
 import { formatDate } from '@/src/lib/format';
 import { PressableScale } from '@/src/motion';
 import { useThemedStyles, type AppTheme } from '@/src/theme';
-import { transposeKeyName } from '@setlist-ultra/core';
+import { soundingKeyName } from '@setlist-ultra/core';
 
 export type SetlistQuickSong = Pick<SongRow, 'id' | 'title' | 'artist' | 'originalKey' | 'keyShift'>;
 
@@ -73,7 +73,7 @@ export function SetlistQuickAccess({
           {songs.map((song, index) => {
             const on = song.id === currentSongId;
             const key =
-              transposeKeyName(song.originalKey, song.keyShift ?? 0) ?? song.originalKey ?? '';
+              soundingKeyName(song.originalKey, song.keyShift ?? 0) ?? song.originalKey ?? '';
             return (
               <PressableScale
                 key={`${song.id}-${index}`}

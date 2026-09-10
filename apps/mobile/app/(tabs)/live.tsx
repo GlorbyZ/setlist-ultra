@@ -1,8 +1,6 @@
-import { type Href, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+﻿import { type Href, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { transposeKeyName } from '@setlist-ultra/core';
-
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { LiveChrome } from '@/src/components/LiveChrome';
@@ -11,38 +9,27 @@ import { SetlistQuickAccess } from '@/src/components/SetlistQuickAccess';
 import { SongViewer } from '@/src/components/SongViewer';
 import { SwipePager } from '@/src/components/SwipePager';
 import { useLiveQueue } from '@/src/hooks/useLiveQueue';
-import { formatClock } from '@/src/lib/format';
 import { resolveAutoscrollSeconds } from '@/src/lib/autoscroll';
+import {
+  currentSoundingKey,
+  keyShiftToPick,
+  persistLiveKeyCapo,
+  songMetaLine,
+  wrapCapo,
+} from '@/src/lib/liveKeyCapo';
 import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
+import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
-
-function wrapCapo(value: number, delta: number) {
-  const next = value + delta;
-  if (next < 0) return 12;
-  if (next > 12) return 0;
-  return next;
-}
-
-function songMetaLine(song: {
-  artist: string;
-  originalKey: string | null;
-  keyShift?: number | null;
-  duration2?: number | null;
-  durationSeconds?: number | null;
-}, transpose: number) {
-  const duration = resolveAutoscrollSeconds(song.duration2, song.durationSeconds);
-  const soundingKey = transposeKeyName(song.originalKey, transpose) ?? song.originalKey;
-  return [song.artist, soundingKey, formatClock(duration)].filter(Boolean).join(' · ');
-}
 
 export default function LiveTab() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue();
-  const [transpose, setTranspose] = useState(0);
+  const { refresh } = useLibrary();
+  const { queue, index, song, loading, go, goTo, reload, setContext, hasSetContext } = useLiveQueue();
+  const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
   const [hideChords, setHideChords] = useState(false);
   const [scrolling, setScrolling] = useState(false);
@@ -59,10 +46,10 @@ export default function LiveTab() {
   useEffect(() => {
     if (!song) return;
     setCapo(song.capo ?? 0);
-    setTranspose(song.keyShift ?? 0);
+    setKeyShift(song.keyShift ?? 0);
     setScrolling(false);
     if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
-  }, [song?.id]);
+  }, [song?.id, song?.capo, song?.keyShift]);
 
   useEffect(() => {
     return subscribePedals((action) => {
@@ -71,6 +58,32 @@ export default function LiveTab() {
       if (action === 'scrollDown') setScrolling(true);
     });
   }, [go]);
+
+  const persistAndRefresh = useCallback(
+    async (patch: { keyShift?: number; capo?: number }) => {
+      if (!song) return;
+      await persistLiveKeyCapo(song.id, patch);
+      await refresh({ silent: true });
+      await reload();
+    },
+    [song, refresh, reload],
+  );
+
+  const changeKeyShift = useCallback(
+    (next: number) => {
+      setKeyShift(next);
+      void persistAndRefresh({ keyShift: next });
+    },
+    [persistAndRefresh],
+  );
+
+  const changeCapo = useCallback(
+    (next: number) => {
+      setCapo(next);
+      void persistAndRefresh({ capo: next });
+    },
+    [persistAndRefresh],
+  );
 
   const chart = useMemo(() => (song ? getCachedSongDocument(song) : null), [song?.id, song?.contentAst, song?.chordpro, song?.updatedAt]);
   const prevChart = useMemo(
@@ -102,17 +115,22 @@ export default function LiveTab() {
 
   const duration = resolveAutoscrollSeconds(song.duration2, song.durationSeconds);
   const reserveTopLeft = hasSetContext;
+  const sounding = currentSoundingKey(song.originalKey, keyShift);
 
   return (
     <View style={{ flex: 1 }}>
       <LiveChrome
         chromeKey={song.id}
         tempo={song.tempo}
-        onCapo={(d) => setCapo((v) => wrapCapo(v, d))}
-        onEdit={() => router.push(`/editor/${song.id}` as Href)}
+        capo={capo}
+        soundingKey={sounding}
+        onCapo={(d) => changeCapo(wrapCapo(capo, d))}
+        onCapoPick={(n) => changeCapo(n)}
+        onEdit={() => router.push(('/editor/' + song.id) as Href)}
         onPrev={prevSong ? () => go(-1) : undefined}
         onNext={nextSong ? () => go(1) : undefined}
-        onTranspose={(d) => setTranspose((v) => v + d)}
+        onTranspose={(d) => changeKeyShift(keyShift + d)}
+        onKeyPick={(keyName) => changeKeyShift(keyShiftToPick(song.originalKey, keyName, keyShift))}
         onToggleLyrics={() => setHideChords((v) => !v)}
         lyricsOnly={hideChords}
         onToggleScroll={() => setScrolling((v) => !v)}
@@ -164,13 +182,13 @@ export default function LiveTab() {
           }>
           <LiveSongPage
             title={song.title}
-            meta={songMetaLine(song, transpose)}
+            meta={songMetaLine(song, keyShift)}
             capo={capo}
-            onCapo={(d) => setCapo((v) => wrapCapo(v, d))}
+            onCapo={(d) => changeCapo(wrapCapo(capo, d))}
             reserveTopLeft={reserveTopLeft}>
             <SongViewer
               document={chart}
-              transpose={transpose}
+              transpose={keyShift}
               capo={capo}
               hideChords={hideChords}
               autoScrollSeconds={scrolling ? duration : undefined}
@@ -215,3 +233,4 @@ function makeStyles(t: AppTheme) {
     },
   };
 }
+

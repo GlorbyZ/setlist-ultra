@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import {
   displayChord,
   formatKeyName,
+  keyShiftForTargetKey,
   parseKeyName,
+  soundingKeyName,
   spellPitch,
   transposeChord,
   transposeKeyName,
@@ -32,8 +34,17 @@ test('slash chords transpose both sides', () => {
   assert.equal(transposeChord('Bb/F', -1), 'A/E');
 });
 
-test('displayChord applies capo toward concert pitch', () => {
+test('displayChord: capo reshapes; keyShift moves concert', () => {
   assert.equal(displayChord('G', 2, 0), 'F');
+  assert.equal(displayChord('G', 0, 2), 'A');
+  assert.equal(displayChord('G', 2, 2), 'G');
+});
+
+test('soundingKeyName ignores capo (concert = original + keyShift)', () => {
+  assert.equal(soundingKeyName('G', 2), 'A');
+  assert.equal(soundingKeyName('G', 0), 'G');
+  assert.equal(keyShiftForTargetKey('G', 'A'), 2);
+  assert.equal(keyShiftForTargetKey('G', 'F'), 10);
 });
 
 test('parse and format key names', () => {

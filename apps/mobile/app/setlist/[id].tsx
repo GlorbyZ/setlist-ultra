@@ -17,12 +17,12 @@ import {
   exportSbpBytes,
   getSetlist,
   getSetlistItems,
-  getSong,
+  getSongsByIds,
   patchAppState,
   removeSetlistItem,
-  setlistDuration,
   updateSetlist,
 } from '@/src/lib/repository';
+import { soundingKeyName } from '@setlist-ultra/core';
 import { saveBinaryFile } from '@/src/lib/files';
 import { PressableScale, pressedStyle } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -49,19 +49,34 @@ export default function SetlistScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [setlistRow, itemRows] = await Promise.all([getSetlist(id), getSetlistItems(id)]);
-    setSetlist(setlistRow);
-    setItems(itemRows);
-    const songIds = itemRows.map((item) => item.songId).filter(Boolean) as string[];
-    const songRows = await Promise.all(songIds.map((songId) => getSong(songId)));
-    const map: Record<string, SongRow> = {};
-    songRows.forEach((song) => {
-      if (song) map[song.id] = song;
-    });
-    setSongsById(map);
-    setTotalSec(await setlistDuration(id));
-    setLoading(false);
-  }, [id]);
+    try {
+      const [setlistRow, itemRows] = await Promise.all([getSetlist(id), getSetlistItems(id)]);
+      setSetlist(setlistRow);
+      setItems(itemRows);
+      const songIds = itemRows.map((item) => item.songId).filter(Boolean) as string[];
+      // Prefer already-loaded library rows; batch-fetch only missing ids.
+      const map: Record<string, SongRow> = {};
+      const missing: string[] = [];
+      for (const songId of songIds) {
+        const fromLib = songs.find((s) => s.id === songId);
+        if (fromLib) map[songId] = fromLib;
+        else missing.push(songId);
+      }
+      if (missing.length) {
+        const fetched = await getSongsByIds(missing);
+        for (const song of fetched) map[song.id] = song;
+      }
+      setSongsById(map);
+      const total = itemRows.reduce((sum, item) => {
+        if (item.itemType === 'timer') return sum + (item.timerSeconds ?? 0);
+        const song = item.songId ? map[item.songId] : null;
+        return sum + (song?.duration2 ?? song?.durationSeconds ?? 0);
+      }, 0);
+      setTotalSec(total);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, songs]);
 
   useEffect(() => {
     void load();
@@ -131,6 +146,10 @@ export default function SetlistScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={16}
+        maxToRenderPerBatch={12}
+        windowSize={8}
+        removeClippedSubviews
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Empty set.</Text>
@@ -165,7 +184,7 @@ export default function SetlistScreen() {
                   </Text>
                 </View>
                 {item.itemType === 'song' ? (
-                  <Text style={styles.key}>{songsById[item.songId ?? '']?.originalKey ?? ''}</Text>
+                  <Text style={styles.key}>{(() => { const s = songsById[item.songId ?? '']; return s ? (soundingKeyName(s.originalKey, s.keyShift ?? 0) ?? s.originalKey ?? '') : ''; })()}</Text>
                 ) : null}
               </View>
             </Pressable>

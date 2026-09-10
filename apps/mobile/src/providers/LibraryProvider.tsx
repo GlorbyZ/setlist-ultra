@@ -19,7 +19,7 @@ type LibraryContextValue = {
   scope: LibraryScope;
   loading: boolean;
   error: string | null;
-  refresh: (opts?: { silent?: boolean }) => Promise<void>;
+  refresh: (opts?: { silent?: boolean; setlistsOnly?: boolean }) => Promise<void>;
   setScope: (scope: LibraryScope) => Promise<void>;
 };
 
@@ -33,7 +33,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+  const refresh = useCallback(async (opts?: { silent?: boolean; setlistsOnly?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     setError(null);
     const load = async () => {

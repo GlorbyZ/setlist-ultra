@@ -3,8 +3,10 @@ import { Platform, Pressable, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CAPO_OPTIONS, KEY_OPTIONS } from '@setlist-ultra/core';
 
 import { Text } from '@/components/Themed';
+import { ActionSheet } from '@/src/components/BrandDialog';
 import { actionFromKey, type PedalAction } from '@/src/lib/pedals';
 import { MOTION_FAST, MOTION_MED, PressableScale } from '@/src/motion';
 import { BRAND_GRADIENT, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -14,11 +16,15 @@ type Props = {
   chromeKey?: string;
   children?: ReactNode;
   onCapo?: (delta: number) => void;
+  onCapoPick?: (capo: number) => void;
+  capo?: number;
   onEdit?: () => void;
   onPedal?: (action: PedalAction) => void;
   onPrev?: () => void;
   onNext?: () => void;
   onTranspose?: (delta: number) => void;
+  onKeyPick?: (keyName: string) => void;
+  soundingKey?: string | null;
   onToggleLyrics?: () => void;
   lyricsOnly?: boolean;
   onToggleScroll?: () => void;
@@ -36,11 +42,15 @@ export function LiveChrome({
   chromeKey,
   children,
   onCapo,
+  onCapoPick,
+  capo = 0,
   onEdit,
   onPedal,
   onPrev,
   onNext,
   onTranspose,
+  onKeyPick,
+  soundingKey,
   onToggleLyrics,
   lyricsOnly,
   onToggleScroll,
@@ -52,6 +62,8 @@ export function LiveChrome({
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
+  const [keyPickerOpen, setKeyPickerOpen] = useState(false);
+  const [capoPickerOpen, setCapoPickerOpen] = useState(false);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayOpacity = useSharedValue(1);
 
@@ -82,6 +94,8 @@ export function LiveChrome({
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
   const bottomPad = Math.max(insets.bottom, 10);
+  const keyLabel = soundingKey?.trim() || 'Key';
+  const capoLabel = 'Capo ' + capo;
 
   return (
     <View style={styles.shell}>
@@ -184,48 +198,78 @@ export function LiveChrome({
                     <Text style={styles.toolText}>Metro {tempo}</Text>
                   </View>
                 ) : null}
-                {onCapo ? (
+                {onCapo || onCapoPick ? (
                   <>
-                    <PressableScale
-                      style={styles.tool}
-                      scaleTo={0.94}
-                      onPress={() => {
-                        bump();
-                        onCapo(-1);
-                      }}>
-                      <Text style={styles.toolText}>Capo −</Text>
-                    </PressableScale>
-                    <PressableScale
-                      style={styles.tool}
-                      scaleTo={0.94}
-                      onPress={() => {
-                        bump();
-                        onCapo(1);
-                      }}>
-                      <Text style={styles.toolText}>Capo +</Text>
-                    </PressableScale>
+                    {onCapoPick ? (
+                      <PressableScale
+                        style={styles.tool}
+                        scaleTo={0.94}
+                        onPress={() => {
+                          bump();
+                          setCapoPickerOpen(true);
+                        }}>
+                        <Text style={styles.toolText}>{capoLabel}</Text>
+                      </PressableScale>
+                    ) : null}
+                    {onCapo ? (
+                      <>
+                        <PressableScale
+                          style={styles.tool}
+                          scaleTo={0.94}
+                          onPress={() => {
+                            bump();
+                            onCapo(-1);
+                          }}>
+                          <Text style={styles.toolText}>Capo −</Text>
+                        </PressableScale>
+                        <PressableScale
+                          style={styles.tool}
+                          scaleTo={0.94}
+                          onPress={() => {
+                            bump();
+                            onCapo(1);
+                          }}>
+                          <Text style={styles.toolText}>Capo +</Text>
+                        </PressableScale>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
-                {onTranspose ? (
+                {onTranspose || onKeyPick ? (
                   <>
-                    <PressableScale
-                      style={styles.tool}
-                      scaleTo={0.94}
-                      onPress={() => {
-                        bump();
-                        onTranspose(-1);
-                      }}>
-                      <Text style={styles.toolText}>Key −</Text>
-                    </PressableScale>
-                    <PressableScale
-                      style={styles.tool}
-                      scaleTo={0.94}
-                      onPress={() => {
-                        bump();
-                        onTranspose(1);
-                      }}>
-                      <Text style={styles.toolText}>Key +</Text>
-                    </PressableScale>
+                    {onKeyPick ? (
+                      <PressableScale
+                        style={styles.tool}
+                        scaleTo={0.94}
+                        onPress={() => {
+                          bump();
+                          setKeyPickerOpen(true);
+                        }}>
+                        <Text style={styles.toolText}>{'Key ' + keyLabel}</Text>
+                      </PressableScale>
+                    ) : null}
+                    {onTranspose ? (
+                      <>
+                        <PressableScale
+                          style={styles.tool}
+                          scaleTo={0.94}
+                          onPress={() => {
+                            bump();
+                            onTranspose(-1);
+                          }}>
+                          <Text style={styles.toolText}>Key −</Text>
+                        </PressableScale>
+                        <PressableScale
+                          style={styles.tool}
+                          scaleTo={0.94}
+                          onPress={() => {
+                            bump();
+                            onTranspose(1);
+                          }}>
+                          <Text style={styles.toolText}>Key +</Text>
+                        </PressableScale>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
                 {onToggleLyrics ? (
@@ -273,6 +317,25 @@ export function LiveChrome({
           )}
         </Pressable>
       </Animated.View>
+
+      <ActionSheet
+        visible={keyPickerOpen}
+        title="Concert key"
+        onClose={() => setKeyPickerOpen(false)}
+        options={KEY_OPTIONS.map((key) => ({
+          label: key === keyLabel || key === soundingKey ? '\u2713 ' + key : key,
+          onPress: () => onKeyPick?.(key),
+        }))}
+      />
+      <ActionSheet
+        visible={capoPickerOpen}
+        title="Capo fret"
+        onClose={() => setCapoPickerOpen(false)}
+        options={CAPO_OPTIONS.map((n) => ({
+          label: n === capo ? '\u2713 Capo ' + n : 'Capo ' + n,
+          onPress: () => onCapoPick?.(n),
+        }))}
+      />
     </View>
   );
 }

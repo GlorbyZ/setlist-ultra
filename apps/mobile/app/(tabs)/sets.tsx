@@ -1,5 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+﻿import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
@@ -7,7 +7,7 @@ import { BrandButton } from '@/src/components/BrandButton';
 import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { formatDate } from '@/src/lib/format';
-import { createSetlist, setlistDuration } from '@/src/lib/repository';
+import { createSetlist, setlistDurations } from '@/src/lib/repository';
 import { pressedStyle } from '@/src/motion';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
@@ -22,15 +22,31 @@ export default function SetsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void refresh({ silent: true });
+      // Sets-only silent refresh — avoid reloading every song chart on tab focus.
+      void refresh({ silent: true, setlistsOnly: true });
     }, [refresh]),
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = setlists.map((s) => s.id);
+    if (!ids.length) {
+      setDurations({});
+      return;
+    }
+    void setlistDurations(ids).then((map) => {
+      if (!cancelled) setDurations(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [setlists]);
 
   const handleCreate = async () => {
     setCreating(true);
     try {
       const id = await createSetlist(`Set ${setlists.length + 1}`);
-      await refresh();
+      await refresh({ setlistsOnly: true });
       router.push(`/setlist/${id}`);
     } finally {
       setCreating(false);
@@ -40,7 +56,7 @@ export default function SetsScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await refresh();
+      await refresh({ setlistsOnly: true });
     } finally {
       setRefreshing(false);
     }
@@ -55,7 +71,7 @@ export default function SetsScreen() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Could not load sets</Text>
           <Text style={styles.emptyBody}>{error}</Text>
-          <BrandButton label="Retry" onPress={() => void refresh()} />
+          <BrandButton label="Retry" onPress={() => void refresh({ setlistsOnly: true })} />
         </View>
       ) : loading && !refreshing ? (
         <View style={styles.loadingBox}>
@@ -66,6 +82,10 @@ export default function SetsScreen() {
           data={setlists}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={theme.accent} />
           }
@@ -79,13 +99,7 @@ export default function SetsScreen() {
             <Pressable
               unstable_pressDelay={0}
               style={pressedStyle(styles.row)}
-              onPress={() => router.push(`/setlist/${item.id}`)}
-              onLayout={() => {
-                if (durations[item.id] != null) return;
-                void setlistDuration(item.id).then((sec) =>
-                  setDurations((prev) => ({ ...prev, [item.id]: sec })),
-                );
-              }}>
+              onPress={() => router.push(`/setlist/${item.id}`)}>
               <Text style={styles.title}>{item.title}</Text>
               <Text style={styles.meta}>
                 {formatDate(item.eventDate)}
@@ -114,7 +128,6 @@ function makeStyles(t: AppTheme) {
       borderColor: t.border,
     },
     title: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },
-    // title/meta always from theme tokens
     meta: { color: t.muted, marginTop: 4, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight, fontWeight: t.type.meta.fontWeight },
     empty: { padding: 32, alignItems: 'center' as const },
     emptyTitle: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },

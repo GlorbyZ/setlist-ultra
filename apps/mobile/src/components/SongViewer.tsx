@@ -31,7 +31,7 @@ export function SongViewer({
   const { theme } = useTheme();
   const chartSize = fontSize ?? theme.type.chart.fontSize;
   const lyricLineHeight = Math.round(chartSize * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
-  // Single transpose path: ChordLyricLine → displayChord(chord, capo, transpose).
+  // SBP: ChordLyricLine -> displayChord(chord, capo, keyShift) = shapes at keyShift-capo.
   // Do NOT also run transposeDocument here (that was double-shifting chords).
   const scrollRef = useRef<ScrollView>(null);
   const fontSizeRef = useRef(chartSize);
