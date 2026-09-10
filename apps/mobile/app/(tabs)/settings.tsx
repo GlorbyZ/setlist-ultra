@@ -6,6 +6,7 @@ import { AntDesign } from '@expo/vector-icons';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
+import { AiSettingsPanel } from '@/src/components/AiSettingsPanel';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { isHostedConfigured } from '@/src/lib/config';
 import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes } from '@/src/lib/repository';
@@ -56,6 +57,10 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.heading}>AI</Text>
+      <Text style={styles.body}>Bring your own API key (Gemini default). Keys stay in SecureStore on this device.</Text>
+      <AiSettingsPanel compact />
+
       <Text style={styles.heading}>Look & Stage</Text>
       <Pressable style={styles.navRow} onPress={() => router.push('/look')}>
         <View style={styles.toolCopy}>
