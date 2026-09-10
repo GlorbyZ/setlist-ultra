@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import type { SongDocument } from '@setlist-ultra/core';
-import { transposeDocument } from '@setlist-ultra/core';
 import { ChordLyricLine } from './ChordLyricLine';
 import { Text } from '@/components/Themed';
 import { DEFAULT_AUTOSCROLL_SECONDS } from '@/src/lib/autoscroll';
@@ -32,7 +31,8 @@ export function SongViewer({
   const { theme } = useTheme();
   const chartSize = fontSize ?? theme.type.chart.fontSize;
   const lyricLineHeight = Math.round(chartSize * (theme.type.chart.lineHeight / theme.type.chart.fontSize));
-  const displayDoc = transpose === 0 ? document : transposeDocument(document, transpose);
+  // Single transpose path: ChordLyricLine → displayChord(chord, capo, transpose).
+  // Do NOT also run transposeDocument here (that was double-shifting chords).
   const scrollRef = useRef<ScrollView>(null);
   const fontSizeRef = useRef(chartSize);
   fontSizeRef.current = chartSize;
@@ -71,7 +71,7 @@ export function SongViewer({
       contentContainerStyle={styles.container}
       onContentSizeChange={(_, h) => setContentH(h)}
       onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
-      {displayDoc.sections.map((section) => (
+      {document.sections.map((section) => (
         <View key={section.id} style={styles.section}>
           {section.label ? (
             <Text style={[styles.sectionLabel, { color: theme.muted, fontSize: theme.type.meta.fontSize }]}>
