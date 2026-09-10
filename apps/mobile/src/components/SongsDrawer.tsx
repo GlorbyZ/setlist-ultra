@@ -106,12 +106,12 @@ function makeStyles(t: AppTheme) {
     panel: {
       position: 'absolute' as const,
       top: 0,
-      left: 0,
+      right: 0,
       bottom: 0,
       width: 280,
       backgroundColor: t.bg,
-      borderRightWidth: 1,
-      borderRightColor: t.border,
+      borderLeftWidth: 1,
+      borderLeftColor: t.border,
     },
     scroll: { paddingTop: 16, paddingHorizontal: 12, paddingBottom: 32, gap: 4 },
     heading: {

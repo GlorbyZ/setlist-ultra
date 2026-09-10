@@ -5,7 +5,7 @@ import { type ComponentProps } from 'react';
 import { type ColorValue, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SongsChromeProvider, SongsHeaderLeft, TabsHeaderLeft } from '@/src/providers/SongsChromeProvider';
+import { SongsChromeProvider, SongsHeaderLeft, SongsHeaderRight, TabsHeaderLeft } from '@/src/providers/SongsChromeProvider';
 import { BRAND_GRADIENT, useTheme } from '@/src/theme';
 
 function TabIcon({

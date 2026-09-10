@@ -40,21 +40,29 @@ export function useSongsChrome() {
   return ctx;
 }
 
+/** Logo only — drawer control lives top-right. */
 export function SongsHeaderLeft() {
+  return (
+    <View style={{ paddingLeft: 8, justifyContent: 'center' }}>
+      <BrandMark height={48} />
+    </View>
+  );
+}
+
+export function SongsHeaderRight() {
   const { theme } = useTheme();
   const { drawerOpen, toggleDrawer } = useSongsChrome();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 8 }}>
+    <View style={{ paddingRight: 8, justifyContent: 'center' }}>
       <Pressable
         onPress={toggleDrawer}
         hitSlop={10}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4, paddingVertical: 4 }}
         accessibilityRole="button"
         accessibilityLabel={drawerOpen ? 'Close menu' : 'Open menu'}>
-        <Ionicons name={drawerOpen ? 'close' : 'menu'} size={26} color={theme.text} />
         {!drawerOpen ? <Ionicons name="chevron-down" size={16} color={theme.text} /> : null}
+        <Ionicons name={drawerOpen ? 'close' : 'menu'} size={26} color={theme.text} />
       </Pressable>
-      <BrandMark height={48} />
     </View>
   );
 }
