@@ -1,5 +1,11 @@
 /** Shared AI chat types — BYOK, never log keys. */
 
+import {
+  ANTHROPIC_DEFAULT_MODEL,
+  GEMINI_DEFAULT_MODEL,
+  OPENAI_DEFAULT_MODEL,
+} from './models';
+
 export type AiProviderId = 'gemini' | 'openai' | 'anthropic';
 
 export const AI_PROVIDERS: readonly {
@@ -12,19 +18,19 @@ export const AI_PROVIDERS: readonly {
     id: 'gemini',
     label: 'Google Gemini',
     keyHint: 'AIza… from Google AI Studio',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: GEMINI_DEFAULT_MODEL,
   },
   {
     id: 'openai',
     label: 'OpenAI',
     keyHint: 'sk-… from platform.openai.com',
-    defaultModel: 'gpt-4o-mini',
+    defaultModel: OPENAI_DEFAULT_MODEL,
   },
   {
     id: 'anthropic',
     label: 'Anthropic',
     keyHint: 'sk-ant-… from console.anthropic.com',
-    defaultModel: 'claude-3-5-haiku-latest',
+    defaultModel: ANTHROPIC_DEFAULT_MODEL,
   },
 ] as const;
 

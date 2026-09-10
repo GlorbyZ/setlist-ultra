@@ -34,6 +34,8 @@ type UiMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  /** Provider model id that produced this assistant reply (optional). */
+  model?: string;
 };
 
 function newId() {
@@ -94,7 +96,7 @@ export default function AiScreen() {
         const result = await chatComplete(id, { apiKey, messages: history });
         setMessages((prev) => [
           ...prev,
-          { id: newId(), role: 'assistant', content: result.text },
+          { id: newId(), role: 'assistant', content: result.text, model: result.model },
         ]);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Request failed';
@@ -163,7 +165,9 @@ export default function AiScreen() {
         <View style={styles.headerCopy}>
           <Text style={styles.title}>AI</Text>
           <Text style={styles.sub}>
-            {configured ? `${meta.label} · BYOK` : 'Add your API key to start'}
+            {configured
+              ? `${meta.label} · ${meta.defaultModel} · BYOK`
+              : 'Add your API key to start'}
           </Text>
         </View>
         <Pressable
@@ -230,6 +234,9 @@ export default function AiScreen() {
                 <Text style={item.role === 'user' ? styles.bubbleUserText : styles.bubbleText}>
                   {item.content}
                 </Text>
+                {item.role === 'assistant' && item.model ? (
+                  <Text style={styles.modelTag}>{item.model}</Text>
+                ) : null}
               </View>
             )}
             ListFooterComponent={
@@ -337,6 +344,7 @@ function makeStyles(t: AppTheme) {
     },
     bubbleText: { color: t.text, fontSize: 15, lineHeight: 22 },
     bubbleUserText: { color: t.accentText, fontSize: 15, lineHeight: 22 },
+    modelTag: { color: t.faint, fontSize: 11, marginTop: 6 },
     typing: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,

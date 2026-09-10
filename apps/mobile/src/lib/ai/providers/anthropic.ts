@@ -1,9 +1,8 @@
+import { ANTHROPIC_DEFAULT_MODEL } from '../models';
 import type { AiChatClient, ChatCompletionRequest, ChatCompletionResult } from '../types';
 
-const DEFAULT_MODEL = 'claude-3-5-haiku-latest';
-
 async function complete(req: ChatCompletionRequest): Promise<ChatCompletionResult> {
-  const model = req.model?.trim() || DEFAULT_MODEL;
+  const model = req.model?.trim() || ANTHROPIC_DEFAULT_MODEL;
   const system = req.messages
     .filter((m) => m.role === 'system')
     .map((m) => m.content)

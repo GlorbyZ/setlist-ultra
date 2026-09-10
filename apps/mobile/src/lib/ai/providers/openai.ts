@@ -1,9 +1,8 @@
+import { OPENAI_DEFAULT_MODEL } from '../models';
 import type { AiChatClient, ChatCompletionRequest, ChatCompletionResult } from '../types';
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
-
 async function complete(req: ChatCompletionRequest): Promise<ChatCompletionResult> {
-  const model = req.model?.trim() || DEFAULT_MODEL;
+  const model = req.model?.trim() || OPENAI_DEFAULT_MODEL;
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
