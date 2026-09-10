@@ -6,6 +6,7 @@ import type { SongDocument } from '@setlist-ultra/core';
 import { transposeDocument } from '@setlist-ultra/core';
 import { ChordLyricLine } from './ChordLyricLine';
 import { Text } from '@/components/Themed';
+import { DEFAULT_AUTOSCROLL_SECONDS } from '@/src/lib/autoscroll';
 import { useTheme } from '@/src/theme';
 
 type Props = {
@@ -37,12 +38,13 @@ export function SongViewer({
   const [layoutH, setLayoutH] = useState(1);
 
   useEffect(() => {
-    if (!autoScrollSeconds || autoScrollSeconds <= 0) return;
+    if (autoScrollSeconds == null) return;
+    const seconds = autoScrollSeconds > 0 ? autoScrollSeconds : DEFAULT_AUTOSCROLL_SECONDS;
     const max = Math.max(0, contentH - layoutH);
     if (max <= 0) return;
     const start = Date.now();
     const id = setInterval(() => {
-      const t = Math.min(1, (Date.now() - start) / (autoScrollSeconds * 1000));
+      const t = Math.min(1, (Date.now() - start) / (seconds * 1000));
       scrollRef.current?.scrollTo({ y: max * t, animated: false });
       if (t >= 1) clearInterval(id);
     }, 50);
@@ -69,14 +71,14 @@ export function SongViewer({
       onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
       {displayDoc.sections.map((section) => (
         <View key={section.id} style={styles.section}>
-          {section.label ? <Text style={styles.sectionLabel}>{section.label}</Text> : null}
+          {section.label ? <Text style={[styles.sectionLabel, { color: theme.muted }]}>{section.label}</Text> : null}
           {section.lines.map((line) => {
             if (line.kind === 'blank') {
               return <View key={line.id} style={styles.blank} />;
             }
             if (hideChords) {
               return (
-                <Text key={line.id} style={[styles.lyricOnly, { fontSize, lineHeight: fontSize * 1.5 }]}>
+                <Text key={line.id} style={[styles.lyricOnly, { fontSize, lineHeight: fontSize * 1.5, color: theme.text }]}>
                   {line.lyric ?? ''}
                 </Text>
               );

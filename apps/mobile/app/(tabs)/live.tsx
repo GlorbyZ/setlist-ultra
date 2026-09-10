@@ -10,6 +10,7 @@ import { SongViewer } from '@/src/components/SongViewer';
 import { SwipePager } from '@/src/components/SwipePager';
 import { useLiveQueue } from '@/src/hooks/useLiveQueue';
 import { formatClock } from '@/src/lib/format';
+import { resolveAutoscrollSeconds } from '@/src/lib/autoscroll';
 import { parseSongDocument } from '@/src/lib/repository';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
@@ -66,7 +67,7 @@ export default function LiveTab() {
     );
   }
 
-  const duration = song.duration2 ?? song.durationSeconds ?? 90;
+  const duration = resolveAutoscrollSeconds(song.duration2, song.durationSeconds);
   const soundingKey = transposeKeyName(song.originalKey, transpose) ?? song.originalKey;
   const meta = [song.artist, soundingKey, formatClock(duration)].filter(Boolean).join(' · ');
 
