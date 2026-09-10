@@ -8,7 +8,6 @@ import {
   LayoutAnimation,
   Platform,
   Pressable,
-  TextInput,
   UIManager,
   useWindowDimensions,
   View,
@@ -17,6 +16,7 @@ import {
 import { Text } from '@/components/Themed';
 import { ActionSheet, BrandDialog } from '@/src/components/BrandDialog';
 import { BrandButton } from '@/src/components/BrandButton';
+import { SearchField } from '@/src/components/SearchField';
 import { SongsDrawer, SongsFilterPanel, type SongListId } from '@/src/components/SongsDrawer';
 import { SongViewer } from '@/src/components/SongViewer';
 import { UgImportSheet } from '@/src/components/UgImportSheet';
@@ -245,18 +245,10 @@ export default function SongsScreen() {
     <View style={styles.container}>
       <View style={[styles.pane, split && styles.listPane]}>
         <View style={styles.toolbar}>
-          <TextInput
+          <SearchField
             placeholder="Search songs"
-            placeholderTextColor={theme.faint}
             value={query}
             onChangeText={setQuery}
-            style={styles.search}
-            returnKeyType="search"
-            blurOnSubmit
-            autoCorrect={false}
-            autoCapitalize="none"
-            enablesReturnKeyAutomatically
-            submitBehavior="blurAndSubmit"
             onSubmitEditing={submitSearch}
           />
           <View style={styles.actionBar}>
@@ -311,7 +303,9 @@ export default function SongsScreen() {
             <BrandButton label="Retry" onPress={() => void refresh()} />
           </View>
         ) : loading ? (
-          <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={theme.accent} />
+          </View>
         ) : (
           <FlatList
             data={rows}
@@ -597,15 +591,7 @@ function makeStyles(t: AppTheme) {
       paddingVertical: 6,
     },
     chipText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
-    search: {
-      backgroundColor: t.inputBg,
-      color: t.text,
-      borderRadius: t.radius.md,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-    },
+    loadingBox: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.bg, paddingTop: 40 },
     list: { paddingHorizontal: 16, paddingBottom: 40 },
     section: { color: t.text, fontWeight: '700' as const, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight, marginBottom: 8, marginTop: 4, letterSpacing: 0.3 },
     status: { color: t.muted, marginBottom: 10, fontSize: t.type.meta.fontSize, lineHeight: t.type.meta.lineHeight, fontWeight: t.type.meta.fontWeight },

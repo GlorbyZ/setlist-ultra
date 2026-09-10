@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
+import { SearchField } from '@/src/components/SearchField';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import type { SongRow } from '@setlist-ultra/db';
 
@@ -44,11 +45,10 @@ export function SongPickerModal({ visible, songs, excludeIds = [], onClose, onCo
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
       <View style={[styles.shell, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Text style={styles.heading}>Add songs</Text>
-        <TextInput
+        <SearchField
           value={query}
           onChangeText={setQuery}
           placeholder="Search library"
-          placeholderTextColor={theme.faint}
           style={styles.search}
         />
         <FlatList
@@ -97,16 +97,7 @@ function makeStyles(t: AppTheme) {
   return {
     shell: { flex: 1, backgroundColor: t.bg, paddingHorizontal: 16 },
     heading: { color: t.text, fontSize: 22, fontWeight: '800' as const, marginBottom: 12 },
-    search: {
-      backgroundColor: t.inputBg,
-      color: t.text,
-      borderRadius: t.radius.md,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      marginBottom: 12,
-    },
+    search: { marginBottom: 12 },
     row: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,

@@ -13,6 +13,7 @@ import {
 import { Text } from '@/components/Themed';
 import { assertUgTabMatchesRequest, fingerprintContent, normalizeUgTab, parseChordPro, type UgTabResponse } from '@setlist-ultra/core';
 import { BrandButton } from '@/src/components/BrandButton';
+import { SearchField } from '@/src/components/SearchField';
 import { BrandDialog } from '@/src/components/BrandDialog';
 import { SongViewer } from '@/src/components/SongViewer';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -245,18 +246,11 @@ export default function ImportScreen() {
         <View style={styles.online}>
           <Text style={styles.label}>Search Ultimate Guitar</Text>
           <View style={styles.row}>
-            <TextInput
+            <SearchField
               value={query}
               onChangeText={setQuery}
               placeholder="Song title or artist"
-              placeholderTextColor={theme.faint}
-              style={[styles.input, { flex: 1, marginBottom: 0 }]}
-              returnKeyType="search"
-              blurOnSubmit
-              autoCorrect={false}
-              autoCapitalize="none"
-              enablesReturnKeyAutomatically
-              submitBehavior="blurAndSubmit"
+              style={{ flex: 1, marginBottom: 0 }}
               onSubmitEditing={() => void runSearch()}
             />
             <Pressable style={styles.searchButton} onPress={() => void runSearch()} disabled={searching}>
