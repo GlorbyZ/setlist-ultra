@@ -56,3 +56,96 @@ test('tabFromStore does not leak a sibling tab when ids differ', () => {
   assert.equal(parsed.tab.title, "Don't Cry");
   assert.notEqual(parsed.tab.title, 'Wonderwall');
 });
+
+test('tabFromStore reads wiki_tab.content from the current page tab_view', () => {
+  const parsed = tabFromStore(
+    {
+      store: {
+        page: {
+          data: {
+            tab: {
+              id: 6125,
+              song_name: 'Wonderwall',
+              artist_name: 'Oasis',
+              tab_url: wonderUrl,
+            },
+            tab_view: {
+              wiki_tab: {
+                content: "[ch]Em[/ch] today is gonna be the day",
+              },
+              versions: [
+                {
+                  id: 99,
+                  song_name: "Don't Cry",
+                  artist_name: "Guns N' Roses",
+                  tab_url: cryUrl,
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    wonderUrl,
+  );
+  assert.equal(parsed.tab.id, '6125');
+  assert.equal(parsed.tab.title, 'Wonderwall');
+  assert.equal(parsed.tab.artist_name, 'Oasis');
+  const lyric = parsed.tab.lines.find((line) => line.type === 'lyric')?.lyric ?? '';
+  assert.match(lyric, /today is gonna be the day/);
+  assert.doesNotMatch(lyric, /Talk to me softly/);
+});
+
+test('tabFromStore does not use the page wiki when the requested URL is a sibling version', () => {
+  const parsed = tabFromStore(
+    {
+      store: {
+        page: {
+          data: {
+            tab: {
+              id: 6125,
+              song_name: 'Wonderwall',
+              artist_name: 'Oasis',
+              tab_url: wonderUrl,
+            },
+            tab_view: {
+              wiki_tab: {
+                content: "[ch]Em[/ch] today is gonna be the day",
+              },
+            },
+          },
+        },
+      },
+    },
+    cryUrl,
+  );
+  assert.equal(parsed, null);
+});
+
+test('tabFromStore keeps page tab metadata when another node reuses the numeric id', () => {
+  const parsed = tabFromStore(
+    {
+      store: {
+        page: {
+          data: {
+            tab: {
+              id: 6125,
+              song_name: 'Wonderwall',
+              artist_name: 'Oasis',
+              tab_url: wonderUrl,
+            },
+            tab_view: {
+              wiki_tab: {
+                content: "[ch]Em[/ch] today is gonna be the day",
+              },
+            },
+            comments: [{ id: 6125, username: 'stray' }],
+          },
+        },
+      },
+    },
+    wonderUrl,
+  );
+  assert.equal(parsed.tab.title, 'Wonderwall');
+  assert.equal(parsed.tab.artist_name, 'Oasis');
+});

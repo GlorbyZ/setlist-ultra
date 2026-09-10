@@ -1,9 +1,7 @@
 # Setlist Ultra — gig-parity implementation plan
 
-**As of:** working tree on `local/next-iteration` (installed on device; **not tagged**)  
-**Last tagged ship:** `v4.0.0` (`1fdda90` on `main`, app version still `4.0.0`)  
-**HEAD commit:** `fbbb2f7` — Verdana charts, swipe settle, library manage  
-**On the phone since then (uncommitted):** keyed Live pager, chord `onTextLayout` + positioned Views, Section jump, pill Live controls, hamburger with no outline.
+**As of:** `v5.0.0` on `main`  
+**Last tagged ship:** `v5.0.0`
 
 Steal Songbook Pro **jobs**, not Settings density. UI canvas: `sbp-vs-ultra-ui` in Cursor. SBP docs: [navigation](https://songbook-pro.com/docs/getting-started/basic-navigation/), [sets](https://songbook-pro.com/docs/getting-started/using-sets/), [song display](https://songbook-pro.com/docs/manual/settings/song-display/), [live buttons](https://songbook-pro.com/docs/manual/live-buttons/).
 

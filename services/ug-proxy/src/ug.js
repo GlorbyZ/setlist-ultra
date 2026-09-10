@@ -213,8 +213,36 @@ function nodeTabUrl(node) {
   return url.startsWith('http') ? url : `https://tabs.ultimate-guitar.com${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
-function nodeHasWiki(node) {
-  return typeof node.content === 'string' && node.content.includes('[ch]');
+function isWikiText(value) {
+  return typeof value === 'string' && (value.includes('[ch]') || value.includes('[tab]'));
+}
+
+function wikiFromNode(node) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return '';
+  if (isWikiText(node.content)) return node.content;
+  const nested = node.wiki_tab;
+  if (nested && typeof nested === 'object' && isWikiText(nested.content)) return nested.content;
+  return '';
+}
+
+function pageDataFromStore(store) {
+  return store?.store?.page?.data || store?.page?.data || null;
+}
+
+function nodeLooksLikeTab(node) {
+  return Boolean(nodeTabUrl(node) || node.song_name || node.songName);
+}
+
+function nodeMatchesRequest(node, want, wantId) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return false;
+  const abs = nodeTabUrl(node);
+  if (abs && canonicalTabUrl(abs) === want) return true;
+  if (!nodeLooksLikeTab(node) || !wantId) return false;
+  return (
+    String(node.id ?? '') === wantId ||
+    String(node.tab_id ?? '') === wantId ||
+    (abs && tabIdFromUrl(abs) === wantId)
+  );
 }
 
 /** Bind metadata + wiki to the requested tab URL — never the last related song on the page. */
@@ -224,26 +252,27 @@ export function tabFromStore(store, requestedUrl) {
   let matched = null;
   let wiki = '';
 
+  const pageData = pageDataFromStore(store);
+  if (pageData?.tab && nodeMatchesRequest(pageData.tab, want, wantId)) {
+    matched = pageData.tab;
+    wiki = wikiFromNode(pageData.tab_view) || wikiFromNode(pageData.tab);
+  }
+
   walk(store, (node) => {
-    if (!node || typeof node !== 'object' || Array.isArray(node)) return;
-    const abs = nodeTabUrl(node);
-    const sameUrl = abs && canonicalTabUrl(abs) === want;
-    const sameId =
-      wantId &&
-      (String(node.id ?? '') === wantId ||
-        String(node.tab_id ?? '') === wantId ||
-        (abs && tabIdFromUrl(abs) === wantId));
-    if (!sameUrl && !sameId) return;
-    matched = node;
-    if (nodeHasWiki(node)) wiki = node.content;
+    if (!nodeMatchesRequest(node, want, wantId)) return;
+    const found = wikiFromNode(node);
+    if (found) wiki = found;
+    if (!matched) matched = node;
+    else if (!(matched.song_name || matched.songName) && nodeLooksLikeTab(node)) matched = node;
   });
 
   if (matched && !wiki) {
     const id = matched.id ?? matched.tab_id;
     walk(store, (node) => {
       if (!node || typeof node !== 'object' || Array.isArray(node)) return;
-      if (!nodeHasWiki(node)) return;
-      if (id != null && (node.id === id || node.tab_id === id)) wiki = node.content;
+      const found = wikiFromNode(node);
+      if (!found) return;
+      if (id != null && (node.id === id || node.tab_id === id)) wiki = found;
     });
   }
 
