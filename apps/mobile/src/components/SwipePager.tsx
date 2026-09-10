@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useLayoutEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -13,24 +13,47 @@ import { MOTION_FAST, MOTION_MED, SNAP_SPRING, useReduceMotion } from '@/src/mot
 
 type Props = {
   children: ReactNode;
+  /** Pre-rendered previous page (kept warm for instant swipe). */
+  prevPage?: ReactNode;
+  /** Pre-rendered next page (kept warm for instant swipe). */
+  nextPage?: ReactNode;
+  /** Song/page id — resets transform after index changes without flash. */
+  pageKey?: string;
   onPrev?: () => void;
   onNext?: () => void;
   enabled?: boolean;
 };
 
-export function SwipePager({ children, onPrev, onNext, enabled = true }: Props) {
+export function SwipePager({
+  children,
+  prevPage,
+  nextPage,
+  pageKey,
+  onPrev,
+  onNext,
+  enabled = true,
+}: Props) {
   const { width } = useWindowDimensions();
   const reduceMotion = useReduceMotion();
   const tx = useSharedValue(0);
   const opacity = useSharedValue(1);
   const locked = useSharedValue(false);
 
-  const settleInstant = (dir: 1 | -1) => {
-    if (dir === 1 && onNext) onNext();
-    if (dir === -1 && onPrev) onPrev();
+  useLayoutEffect(() => {
     tx.value = 0;
     opacity.value = 1;
     locked.value = false;
+  }, [pageKey, opacity, tx]);
+
+  const settle = (dir: 1 | -1) => {
+    if (dir === 1 && onNext) onNext();
+    if (dir === -1 && onPrev) onPrev();
+    // pageKey layout effect snaps tx back after neighbors remount
+    if (!pageKey) {
+      tx.value = 0;
+      opacity.value = 1;
+      locked.value = false;
+    }
   };
 
   const finishSlide = (dir: 1 | -1) => {
@@ -41,7 +64,7 @@ export function SwipePager({ children, onPrev, onNext, enabled = true }: Props) 
           locked.value = false;
           return;
         }
-        runOnJS(settleInstant)(dir);
+        runOnJS(settle)(dir);
         opacity.value = withTiming(1, { duration: MOTION_FAST });
       });
       return;
@@ -52,7 +75,7 @@ export function SwipePager({ children, onPrev, onNext, enabled = true }: Props) 
         locked.value = false;
         return;
       }
-      runOnJS(settleInstant)(dir);
+      runOnJS(settle)(dir);
     });
   };
 
@@ -89,19 +112,25 @@ export function SwipePager({ children, onPrev, onNext, enabled = true }: Props) 
     });
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }],
+    transform: [{ translateX: tx.value - width }],
     opacity: opacity.value,
   }));
 
   return (
     <GestureDetector gesture={pan}>
-      <View style={styles.fill}>
-        <Animated.View style={[styles.fill, animatedStyle]}>{children}</Animated.View>
+      <View style={styles.viewport}>
+        <Animated.View style={[styles.track, { width: width * 3 }, animatedStyle]}>
+          <View style={[styles.page, { width }]}>{prevPage}</View>
+          <View style={[styles.page, { width }]}>{children}</View>
+          <View style={[styles.page, { width }]}>{nextPage}</View>
+        </Animated.View>
       </View>
     </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
+  viewport: { flex: 1, overflow: 'hidden' },
+  track: { flex: 1, flexDirection: 'row' },
+  page: { flex: 1 },
 });

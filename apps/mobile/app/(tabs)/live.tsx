@@ -11,7 +11,7 @@ import { SwipePager } from '@/src/components/SwipePager';
 import { useLiveQueue } from '@/src/hooks/useLiveQueue';
 import { formatClock } from '@/src/lib/format';
 import { resolveAutoscrollSeconds } from '@/src/lib/autoscroll';
-import { parseSongDocument } from '@/src/lib/repository';
+import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -34,6 +34,13 @@ export default function LiveTab() {
   const [scrolling, setScrolling] = useState(false);
   const [fontSize, setFontSize] = useState(18);
 
+  const prevSong = index > 0 ? queue[index - 1] : null;
+  const nextSong = index < queue.length - 1 ? queue[index + 1] : null;
+
+  useEffect(() => {
+    warmSongDocuments([prevSong, song, nextSong]);
+  }, [prevSong?.id, song?.id, nextSong?.id, prevSong?.updatedAt, song?.updatedAt, nextSong?.updatedAt]);
+
   useEffect(() => {
     if (!song) return;
     setCapo(song.capo ?? 0);
@@ -50,9 +57,14 @@ export default function LiveTab() {
     });
   }, [go]);
 
-  const chart = useMemo(
-    () => (song ? parseSongDocument(song) : null),
-    [song?.id, song?.contentAst, song?.chordpro],
+  const chart = useMemo(() => (song ? getCachedSongDocument(song) : null), [song?.id, song?.contentAst, song?.chordpro, song?.updatedAt]);
+  const prevChart = useMemo(
+    () => (prevSong ? getCachedSongDocument(prevSong) : null),
+    [prevSong?.id, prevSong?.contentAst, prevSong?.chordpro, prevSong?.updatedAt],
+  );
+  const nextChart = useMemo(
+    () => (nextSong ? getCachedSongDocument(nextSong) : null),
+    [nextSong?.id, nextSong?.contentAst, nextSong?.chordpro, nextSong?.updatedAt],
   );
 
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={theme.accent} />;
@@ -79,8 +91,8 @@ export default function LiveTab() {
       tempo={song.tempo}
       onCapo={(d) => setCapo((v) => wrapCapo(v, d))}
       onEdit={() => router.push(`/editor/${song.id}` as Href)}
-      onPrev={index > 0 ? () => go(-1) : undefined}
-      onNext={index < queue.length - 1 ? () => go(1) : undefined}
+      onPrev={prevSong ? () => go(-1) : undefined}
+      onNext={nextSong ? () => go(1) : undefined}
       onTranspose={(d) => setTranspose((v) => v + d)}
       onToggleLyrics={() => setHideChords((v) => !v)}
       lyricsOnly={hideChords}
@@ -92,7 +104,32 @@ export default function LiveTab() {
         if (action === 'prev') go(-1);
         if (action === 'scrollDown') setScrolling(true);
       }}>
-      <SwipePager onPrev={index > 0 ? () => go(-1) : undefined} onNext={index < queue.length - 1 ? () => go(1) : undefined}>
+      <SwipePager
+        pageKey={song.id}
+        onPrev={prevSong ? () => go(-1) : undefined}
+        onNext={nextSong ? () => go(1) : undefined}
+        prevPage={
+          prevChart && prevSong ? (
+            <SongViewer
+              document={prevChart}
+              transpose={prevSong.keyShift ?? 0}
+              capo={prevSong.capo ?? 0}
+              hideChords={hideChords}
+              fontSize={fontSize}
+            />
+          ) : null
+        }
+        nextPage={
+          nextChart && nextSong ? (
+            <SongViewer
+              document={nextChart}
+              transpose={nextSong.keyShift ?? 0}
+              capo={nextSong.capo ?? 0}
+              hideChords={hideChords}
+              fontSize={fontSize}
+            />
+          ) : null
+        }>
         <SongViewer
           document={chart}
           transpose={transpose}
