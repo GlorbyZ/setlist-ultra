@@ -129,7 +129,7 @@ function makeStyles(t: AppTheme) {
       justifyContent: 'center' as const,
     },
     checkOn: { backgroundColor: t.accent, borderColor: t.accent },
-    checkMark: { color: '#FFFFFF', fontWeight: '800' as const, fontSize: 12 },
+    checkMark: { color: t.accentText, fontWeight: '800' as const, fontSize: 12 },
     rowMain: { flex: 1 },
     title: { color: t.text, fontWeight: '700' as const, fontSize: 16 },
     meta: { color: t.muted, marginTop: 2, fontSize: 13 },

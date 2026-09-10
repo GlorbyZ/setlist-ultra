@@ -318,6 +318,6 @@ function makeStyles(t: AppTheme) {
       justifyContent: 'center' as const,
       paddingHorizontal: 18,
     },
-    swipeRemoveText: { color: '#FFFFFF', fontWeight: '700' as const },
+    swipeRemoveText: { color: t.accentText, fontWeight: '700' as const },
   };
 }

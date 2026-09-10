@@ -1,7 +1,8 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { brand } from '@/src/theme';
+import { Text } from '@/components/Themed';
+import { BRAND_GRADIENT, useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 type Props = {
   label: string;
@@ -11,6 +12,8 @@ type Props = {
 };
 
 export function BrandButton({ label, onPress, disabled, busy }: Props) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const inactive = disabled && !busy;
 
   return (
@@ -21,22 +24,28 @@ export function BrandButton({ label, onPress, disabled, busy }: Props) {
         </View>
       ) : (
         <LinearGradient
-          colors={[brand.ultraMagenta, brand.ultraViolet, brand.ultraBlue]}
+          colors={[...BRAND_GRADIENT]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[styles.gradient, busy && styles.busy]}>
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.label}>{label}</Text>}
+          {busy ? (
+            <ActivityIndicator color={theme.accentText} />
+          ) : (
+            <Text style={styles.label}>{label}</Text>
+          )}
         </LinearGradient>
       )}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { marginBottom: 12 },
-  gradient: { paddingVertical: 14, alignItems: 'center', borderRadius: 8 },
-  busy: { opacity: 0.85 },
-  label: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },
-  disabledFill: { backgroundColor: brand.paperLine },
-  disabledLabel: { color: '#8E8E93', fontWeight: '700', fontSize: 16 },
-});
+function makeStyles(t: AppTheme) {
+  return {
+    wrap: { marginBottom: 12 },
+    gradient: { paddingVertical: 14, alignItems: 'center' as const, borderRadius: t.radius.md },
+    busy: { opacity: 0.85 },
+    label: { color: t.accentText, fontWeight: '700' as const, fontSize: 16 },
+    disabledFill: { backgroundColor: t.panel, borderWidth: 1, borderColor: t.border },
+    disabledLabel: { color: t.faint, fontWeight: '700' as const, fontSize: 16 },
+  };
+}

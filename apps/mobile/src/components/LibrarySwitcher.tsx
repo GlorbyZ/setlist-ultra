@@ -89,6 +89,6 @@ function makeStyles(t: AppTheme) {
       paddingVertical: 8,
     },
     chipText: { color: t.text, fontWeight: '700' as const, fontSize: 12 },
-    chipOnText: { color: '#FFFFFF', fontWeight: '700' as const, fontSize: 12 },
+    chipOnText: { color: t.accentText, fontWeight: '700' as const, fontSize: 12 },
   };
 }
