@@ -40,15 +40,34 @@ export function useSongsChrome() {
   return ctx;
 }
 
-/** Logo only — drawer control lives top-right. */
+/** Left: opens/closes the downward filters/library expansion. */
 export function SongsHeaderLeft() {
+  const { theme } = useTheme();
+  const { drawerOpen, toggleDrawer } = useSongsChrome();
   return (
     <View style={{ paddingLeft: 8, justifyContent: 'center' }}>
-      <BrandMark height={48} />
+      <Pressable
+        onPress={toggleDrawer}
+        hitSlop={10}
+        style={{ paddingHorizontal: 4, paddingVertical: 4 }}
+        accessibilityRole="button"
+        accessibilityLabel={drawerOpen ? 'Collapse filters' : 'Expand filters'}>
+        <Ionicons name={drawerOpen ? 'chevron-up' : 'chevron-down'} size={26} color={theme.text} />
+      </Pressable>
     </View>
   );
 }
 
+/** Center: SETLIST ULTRA wordmark. */
+export function SongsHeaderTitle() {
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <BrandMark height={40} />
+    </View>
+  );
+}
+
+/** Right: hamburger menu (same panel as left expansion). */
 export function SongsHeaderRight() {
   const { theme } = useTheme();
   const { drawerOpen, toggleDrawer } = useSongsChrome();
@@ -57,10 +76,9 @@ export function SongsHeaderRight() {
       <Pressable
         onPress={toggleDrawer}
         hitSlop={10}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4, paddingVertical: 4 }}
+        style={{ paddingHorizontal: 4, paddingVertical: 4 }}
         accessibilityRole="button"
         accessibilityLabel={drawerOpen ? 'Close menu' : 'Open menu'}>
-        {!drawerOpen ? <Ionicons name="chevron-down" size={16} color={theme.text} /> : null}
         <Ionicons name={drawerOpen ? 'close' : 'menu'} size={26} color={theme.text} />
       </Pressable>
     </View>

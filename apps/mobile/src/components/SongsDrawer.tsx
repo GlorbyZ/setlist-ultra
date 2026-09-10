@@ -25,6 +25,7 @@ type Props = {
   onOpenFilter: (which: 'key' | 'tag' | 'artist' | 'source' | 'sort') => void;
 };
 
+/** Downward expansion under the Songs header (not a side drawer). */
 export function SongsDrawer({
   listId,
   onSelectList,
@@ -57,7 +58,7 @@ export function SongsDrawer({
     <View style={styles.root} pointerEvents="box-none">
       <Pressable style={styles.dim} onPress={() => setDrawerOpen(false)} accessibilityLabel="Close menu" />
       <View style={styles.panel}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.heading}>Library</Text>
           <LibrarySwitcher onChanged={() => setDrawerOpen(false)} />
 
@@ -100,31 +101,42 @@ function makeStyles(t: AppTheme) {
   return {
     root: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0, zIndex: 20 },
     dim: {
-      ...({ position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 }),
+      position: 'absolute' as const,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
       backgroundColor: 'rgba(10,10,12,0.35)',
     },
     panel: {
       position: 'absolute' as const,
       top: 0,
+      left: 0,
       right: 0,
-      bottom: 0,
-      width: 280,
+      maxHeight: '70%' as unknown as number,
       backgroundColor: t.bg,
-      borderLeftWidth: 1,
-      borderLeftColor: t.border,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.18,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
     },
-    scroll: { paddingTop: 16, paddingHorizontal: 12, paddingBottom: 32, gap: 4 },
+    scroll: { paddingTop: 8, paddingHorizontal: 12, paddingBottom: 20, gap: 4 },
     heading: {
       color: t.muted,
-      fontWeight: '700' as const,
+      fontWeight: '600' as const,
       fontSize: 12,
       marginBottom: 8,
       marginTop: 12,
       paddingHorizontal: 8,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase' as const,
     },
     row: { paddingVertical: 14, paddingHorizontal: 12, borderRadius: t.radius.md },
     rowOn: { backgroundColor: t.panel },
-    label: { color: t.text, fontWeight: '700' as const, fontSize: 16 },
+    label: { color: t.text, fontWeight: '600' as const, fontSize: 16 },
     labelOn: { color: t.accent },
   };
 }

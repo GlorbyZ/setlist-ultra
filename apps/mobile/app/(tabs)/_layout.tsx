@@ -5,7 +5,13 @@ import { type ComponentProps } from 'react';
 import { type ColorValue, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SongsChromeProvider, SongsHeaderLeft, SongsHeaderRight, TabsHeaderLeft } from '@/src/providers/SongsChromeProvider';
+import {
+  SongsChromeProvider,
+  SongsHeaderLeft,
+  SongsHeaderRight,
+  SongsHeaderTitle,
+  TabsHeaderLeft,
+} from '@/src/providers/SongsChromeProvider';
 import { BRAND_GRADIENT, useTheme } from '@/src/theme';
 
 function TabIcon({
@@ -43,66 +49,68 @@ export default function TabLayout() {
 
   return (
     <SongsChromeProvider>
-    <Tabs
-      screenOptions={{
-        headerLeft: () => <TabsHeaderLeft />,
-        headerTitle: () => null,
-        headerTitleAlign: 'left',
-        headerLeftContainerStyle: { paddingLeft: 0, justifyContent: 'center' },
-        headerStyle: { backgroundColor: theme.bg, height: 64 + insets.top },
-        tabBarActiveTintColor: theme.accent,
-        tabBarInactiveTintColor: theme.muted,
-        tabBarActiveBackgroundColor: 'transparent',
-        headerShadowVisible: false,
-        headerTintColor: theme.text,
-        tabBarStyle: {
-          backgroundColor: theme.bg,
-          borderTopColor: theme.border,
-          height: 56 + tabPad,
-          paddingBottom: tabPad,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Songs',
-          headerLeft: () => <SongsHeaderLeft />,
-          headerRight: () => <SongsHeaderRight />,
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="musical-notes" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="sets"
-        options={{
-          title: 'Sets',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="list" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="live"
-        options={{
-          title: 'Live',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="play" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="settings-outline" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-    </Tabs>
+      <Tabs
+        screenOptions={{
+          headerLeft: () => <TabsHeaderLeft />,
+          headerTitle: () => null,
+          headerTitleAlign: 'left',
+          headerLeftContainerStyle: { paddingLeft: 0, justifyContent: 'center' },
+          headerStyle: { backgroundColor: theme.bg, height: 64 + insets.top },
+          tabBarActiveTintColor: theme.accent,
+          tabBarInactiveTintColor: theme.muted,
+          tabBarActiveBackgroundColor: 'transparent',
+          headerShadowVisible: false,
+          headerTintColor: theme.text,
+          tabBarStyle: {
+            backgroundColor: theme.bg,
+            borderTopColor: theme.border,
+            height: 56 + tabPad,
+            paddingBottom: tabPad,
+            paddingTop: 6,
+          },
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Songs',
+            headerLeft: () => <SongsHeaderLeft />,
+            headerTitle: () => <SongsHeaderTitle />,
+            headerTitleAlign: 'center',
+            headerRight: () => <SongsHeaderRight />,
+            tabBarIcon: ({ color, size, focused }) => (
+              <TabIcon name="musical-notes" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="sets"
+          options={{
+            title: 'Sets',
+            tabBarIcon: ({ color, size, focused }) => (
+              <TabIcon name="list" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="live"
+          options={{
+            title: 'Live',
+            tabBarIcon: ({ color, size, focused }) => (
+              <TabIcon name="play" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+            tabBarIcon: ({ color, size, focused }) => (
+              <TabIcon name="settings-outline" color={color} size={size} focused={focused} />
+            ),
+          }}
+        />
+      </Tabs>
     </SongsChromeProvider>
   );
 }
