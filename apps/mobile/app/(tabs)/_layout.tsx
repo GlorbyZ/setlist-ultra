@@ -69,6 +69,7 @@ export default function TabLayout() {
         options={{
           title: 'Songs',
           headerLeft: () => <SongsHeaderLeft />,
+          headerRight: () => <SongsHeaderRight />,
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon name="musical-notes" color={color} size={size} focused={focused} />
           ),
