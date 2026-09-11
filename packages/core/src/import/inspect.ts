@@ -4,6 +4,15 @@ export const IMPORT_LIMITS = {
   maxCompressionRatio: 80,
 };
 
+export function assertImportPayload(bytes: Uint8Array | null | undefined) {
+  if (!bytes || bytes.byteLength === 0) {
+    throw new Error('The file was empty or could not be read.');
+  }
+  if (bytes.byteLength > IMPORT_LIMITS.maxUncompressedBytes) {
+    throw new Error('This file is too large to import safely.');
+  }
+}
+
 export function inspectUnzippedArchive(files: Record<string, Uint8Array>, compressedBytes: number) {
   const names = Object.keys(files);
   if (names.length > IMPORT_LIMITS.maxEntries) {

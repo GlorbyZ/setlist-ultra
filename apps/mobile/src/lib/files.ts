@@ -1,11 +1,12 @@
 import { Platform } from 'react-native';
+import { IMPORT_LIMITS } from '@setlist-ultra/core';
 
 export async function pickBinaryFile(accept = '.sbp,.sbpbackup,.cho,.chopro,.crd,.onsong,.pro,.txt,.zip,.pdf,.mp3,.m4a,.wav,.aac'): Promise<{
   name: string;
   bytes: Uint8Array;
 } | null> {
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = accept;
@@ -13,6 +14,10 @@ export async function pickBinaryFile(accept = '.sbp,.sbpbackup,.cho,.chopro,.crd
         const file = input.files?.[0];
         if (!file) {
           resolve(null);
+          return;
+        }
+        if (file.size > IMPORT_LIMITS.maxUncompressedBytes) {
+          reject(new Error('This file is too large to import safely.'));
           return;
         }
         resolve({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
@@ -28,6 +33,9 @@ export async function pickBinaryFile(accept = '.sbp,.sbpbackup,.cho,.chopro,.crd
   });
   if (result.canceled || !result.assets?.[0]) return null;
   const asset = result.assets[0];
+  if (typeof asset.size === 'number' && asset.size > IMPORT_LIMITS.maxUncompressedBytes) {
+    throw new Error('This file is too large to import safely.');
+  }
   const response = await fetch(asset.uri);
   const buffer = await response.arrayBuffer();
   return { name: asset.name ?? 'import.sbp', bytes: new Uint8Array(buffer) };

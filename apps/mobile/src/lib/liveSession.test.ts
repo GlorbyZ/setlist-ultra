@@ -6,7 +6,7 @@ import {
   mergeFollowQueue,
   pickLiveIndex,
 } from './liveSession';
-import { midiOutputsAvailable, parseMidiOnLoad, serializeMidiOnLoad } from './midi';
+import { midiOnLoadFrames, midiOutputsAvailable, parseMidiOnLoad, serializeMidiOnLoad } from './midi';
 import { isPublicServiceUrl, isUsableHttpUrl, sanitizeConfigValue } from './configValidate';
 
 test('mergeFollowQueue keeps the on-stage song row even if the incoming copy changed', () => {
@@ -55,6 +55,13 @@ test('parseMidiOnLoad rejects incomplete or out-of-range payloads', () => {
 
 test('midiOutputsAvailable is false in node tests without Web MIDI', () => {
   assert.equal(midiOutputsAvailable(), false);
+});
+
+test('midiOnLoadFrames sends Note Off after Note On', () => {
+  const frames = midiOnLoadFrames({ channel: 1, program: 27, note: 60 });
+  assert.deepEqual(frames.immediate[0], [0xc0, 27]);
+  assert.deepEqual(frames.immediate[1], [0x90, 60, 100]);
+  assert.deepEqual(frames.noteOff, [0x80, 60, 0]);
 });
 
 test('buildLiveQueueFromSet keeps notes, timers, and duplicate song occurrences', () => {

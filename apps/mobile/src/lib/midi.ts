@@ -25,6 +25,16 @@ export function serializeMidiOnLoad(midi: MidiOnLoad): string {
   return JSON.stringify(midi);
 }
 
+/** Program change + Note On, then Note Off (send Note Off after a short delay). */
+export function midiOnLoadFrames(midi: MidiOnLoad): { immediate: number[][]; noteOff: number[] | null } {
+  const channel = midi.channel - 1;
+  const immediate: number[][] = [];
+  if (midi.program != null) immediate.push([0xc0 | channel, midi.program]);
+  if (midi.note != null) immediate.push([0x90 | channel, midi.note, 100]);
+  const noteOff = midi.note != null ? [0x80 | channel, midi.note, 0] : null;
+  return { immediate, noteOff };
+}
+
 /** Web MIDI only. Android/iOS have a navigator object but not requestMIDIAccess. */
 export function midiOutputsAvailable(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -39,12 +49,16 @@ export async function sendMidiOnLoad(payload: string | null | undefined) {
     const outputs = [...access.outputs.values()];
     const out = outputs[0];
     if (!out) return;
-    const channel = parsed.channel - 1;
-    if (parsed.program != null) {
-      out.send([0xc0 | channel, parsed.program]);
-    }
-    if (parsed.note != null) {
-      out.send([0x90 | channel, parsed.note, 100]);
+    const { immediate, noteOff } = midiOnLoadFrames(parsed);
+    for (const frame of immediate) out.send(frame);
+    if (noteOff) {
+      setTimeout(() => {
+        try {
+          out.send(noteOff);
+        } catch {
+          // Port may have closed.
+        }
+      }, 120);
     }
   } catch {
     // MIDI is optional; ignore missing Web MIDI / no output ports.

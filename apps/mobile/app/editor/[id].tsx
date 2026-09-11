@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventRemove } from '@react-navigation/native';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,6 +28,7 @@ import type { SongRow } from '@setlist-ultra/db';
 export default function EditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const { refresh, orgs } = useLibrary();
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -110,6 +112,17 @@ export default function EditorScreen() {
       setSaving(false);
     }
   };
+
+  usePreventRemove(dirty && !saving, ({ data }) => {
+    Alert.alert('Unsaved changes', 'Save before leaving, or discard them.', [
+      { text: 'Stay', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => navigation.dispatch(data.action),
+      },
+    ]);
+  });
 
   if (!song) {
     return (

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.5",
+    "version": "5.0.6",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -47,7 +47,7 @@
           }
         ]
       },
-      "buildNumber": "44"
+      "buildNumber": "45"
     },
     "android": {
       "package": "com.setlistultra.app",
@@ -120,7 +120,7 @@
           ]
         }
       ],
-      "versionCode": 62
+      "versionCode": 63
     },
     "web": {
       "bundler": "metro",
@@ -196,6 +196,8 @@
       "supabaseAnonKey": "",
       "managerUrl": "",
       "webAppUrl": "",
+      "privacyPolicyUrl": "",
+      "supportEmail": "epicnigs3@gmail.com",
       "router": {},
       "eas": {
         "projectId": "6d749cfe-0b5d-441c-be35-941a500dcbae"

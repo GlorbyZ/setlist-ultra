@@ -7,17 +7,29 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "environment": "development",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_UG_PROXY_URL": "https://ug.bigzay.com",
+        "EXPO_PUBLIC_LAUNCH_AI": "1",
+        "EXPO_PUBLIC_LAUNCH_SCAN": "1"
       }
     },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
       "android": {
         "buildType": "apk"
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_UG_PROXY_URL": "https://ug.bigzay.com",
+        "EXPO_PUBLIC_LAUNCH_AI": "1",
+        "EXPO_PUBLIC_LAUNCH_SCAN": "1"
       }
     },
     "preview-simulator": {
@@ -28,8 +40,12 @@
     },
     "production": {
       "distribution": "store",
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_UG_PROXY_URL": "https://ug.bigzay.com"
       }
     }
   },

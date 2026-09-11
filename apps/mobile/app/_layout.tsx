@@ -94,6 +94,7 @@ function RootLayoutNav() {
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Add songs' }} />
         <Stack.Screen name="groups" options={{ title: 'Groups' }} />
         <Stack.Screen name="look" options={{ title: 'Look & Stage' }} />
+        <Stack.Screen name="legal/privacy" options={{ title: 'Privacy' }} />
       </Stack>
     </ThemeProvider>
   );

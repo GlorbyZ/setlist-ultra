@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AntDesign } from '@expo/vector-icons';
 import { EMPTY_SYNC_PROGRESS, type SyncProgressEvent } from '@setlist-ultra/core';
@@ -10,10 +10,10 @@ import { BrandDialog } from '@/src/components/BrandDialog';
 import { AiSettingsPanel } from '@/src/components/AiSettingsPanel';
 import { SyncOverlay } from '@/src/components/SyncOverlay';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { isHostedConfigured } from '@/src/lib/config';
+import { config, isHostedConfigured } from '@/src/lib/config';
 import { launchFlags } from '@/src/lib/launchFlags';
-import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes } from '@/src/lib/repository';
-import { saveBinaryFile } from '@/src/lib/files';
+import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes, importAnyChartFile } from '@/src/lib/repository';
+import { pickBinaryFile, saveBinaryFile } from '@/src/lib/files';
 import {
   hostedSessionEmail,
   hostedSignIn,
@@ -37,7 +37,11 @@ export default function SettingsScreen() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(hosted ? 'Local library' : 'Cloud sync is off. Using this device only.');
-  const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
+  const [dialog, setDialog] = useState<{
+    title: string;
+    body: string;
+    confirm?: { label: string; danger?: boolean; onPress: () => void | Promise<void> };
+  } | null>(null);
   const [syncUi, setSyncUi] = useState<{
     visible: boolean;
     headline: string;
@@ -141,6 +145,29 @@ export default function SettingsScreen() {
                   })
                 }>
                 <Text style={styles.ghostText}>Sign out</Text>
+              </Pressable>
+              <Pressable
+                style={styles.ghost}
+                disabled={busy}
+                onPress={() =>
+                  setDialog({
+                    title: 'Delete cloud account?',
+                    body: `This signs you out on this device. Email ${config.supportEmail} to delete hosted data. Local songs stay until you uninstall.`,
+                    confirm: {
+                      label: 'Sign out and email',
+                      danger: true,
+                      onPress: async () => {
+                        await hostedSignOut();
+                        setSessionEmail(null);
+                        setStatus('Signed out · local only');
+                        await Linking.openURL(
+                          `mailto:${config.supportEmail}?subject=${encodeURIComponent('Delete Setlist Ultra account')}`,
+                        );
+                      },
+                    },
+                  })
+                }>
+                <Text style={styles.ghostText}>Delete cloud account</Text>
               </Pressable>
             </>
           ) : (
@@ -299,6 +326,43 @@ export default function SettingsScreen() {
         }>
         <Text style={styles.secondaryText}>Export .sbpbackup</Text>
       </Pressable>
+      <Pressable
+        style={styles.secondary}
+        disabled={busy}
+        onPress={() =>
+          void run(async () => {
+            const picked = await pickBinaryFile('.sbpbackup,.sbp');
+            if (!picked) return;
+            const result = await importAnyChartFile(picked.bytes, picked.name);
+            await refresh();
+            setDialog({
+              title: 'Backup restored',
+              body: `Imported ${result.songs} song(s) and ${result.sets} set(s). Attached audio and PDFs were not in the backup.`,
+            });
+          })
+        }>
+        <Text style={styles.secondaryText}>Restore .sbpbackup</Text>
+      </Pressable>
+      <Text style={styles.body}>
+        GitHub APKs and Google Play use different signing keys. Uninstall a sideloaded build before installing from Play,
+        or updates will fail. Export a backup first if you need to keep this library.
+      </Text>
+
+      <Text style={styles.heading}>Privacy & support</Text>
+      <Pressable style={styles.navRow} onPress={() => router.push('/legal/privacy')}>
+        <View style={styles.toolCopy}>
+          <Text style={styles.navTitle}>Privacy</Text>
+          <Text style={styles.navHint}>What stays on this device and what optional features send.</Text>
+        </View>
+        <Text style={styles.navChevron}>›</Text>
+      </Pressable>
+      <Pressable style={styles.navRow} onPress={() => void Linking.openURL(`mailto:${config.supportEmail}`)}>
+        <View style={styles.toolCopy}>
+          <Text style={styles.navTitle}>Email support</Text>
+          <Text style={styles.navHint}>{config.supportEmail}</Text>
+        </View>
+        <Text style={styles.navChevron}>›</Text>
+      </Pressable>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pedals</Text>
@@ -319,7 +383,22 @@ export default function SettingsScreen() {
         title={dialog?.title ?? ''}
         body={dialog?.body}
         onClose={() => setDialog(null)}
-        actions={[{ label: 'OK', onPress: () => setDialog(null) }]}
+        actions={
+          dialog?.confirm
+            ? [
+                { label: 'Cancel', onPress: () => setDialog(null) },
+                {
+                  label: dialog.confirm.label,
+                  danger: dialog.confirm.danger,
+                  onPress: () => {
+                    const next = dialog.confirm;
+                    setDialog(null);
+                    if (next) void run(async () => { await next.onPress(); });
+                  },
+                },
+              ]
+            : [{ label: 'OK', onPress: () => setDialog(null) }]
+        }
       />
     </ScrollView>
   );

@@ -1,6 +1,7 @@
 import { and, eq, isNull, or } from 'drizzle-orm';
 import {
   archiveSourceKey,
+  assertImportPayload,
   detectImportFormat,
   foldArrangementTitle,
   hashImportBytes,
@@ -202,6 +203,8 @@ export async function importSbpArchive(
   scope?: LibraryScope,
   options?: ImportOptions,
 ): Promise<ImportArchiveResult> {
+  assertImportPayload(bytes);
+  throwIfAborted(options?.signal);
   const format = detectImportFormat(bytes, filename);
   const kind = format === 'sbpbackup' || filename?.toLowerCase().endsWith('.sbpbackup') ? 'backup' : 'set';
   const parsed = parseSbpArchive(bytes, kind);
@@ -469,6 +472,8 @@ export async function importSbpArchive(
 }
 
 export async function importAnyChartFile(bytes: Uint8Array, filename?: string, options?: ImportOptions) {
+  assertImportPayload(bytes);
+  throwIfAborted(options?.signal);
   const format = detectImportFormat(bytes, filename);
   if (format === 'pdf') {
     throwIfAborted(options?.signal);

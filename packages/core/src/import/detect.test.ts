@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { detectImportFormat, looksLikeChordPro } from './detect';
 import { archiveSourceKey, hashImportBytes } from './identity';
-import { inspectUnzippedArchive } from './inspect';
+import { assertImportPayload, inspectUnzippedArchive } from './inspect';
 
 test('detects SBP zip magic and ChordPro text', () => {
   const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
@@ -32,6 +32,14 @@ test('inspect rejects path traversal and oversized entry counts', () => {
   assert.throws(() => inspectUnzippedArchive(many, 4001));
   const bomb = { 'a.bin': new Uint8Array(170_000) };
   assert.throws(() => inspectUnzippedArchive(bomb, 2049));
+});
+
+test('assertImportPayload rejects empty and oversized files', () => {
+  assert.throws(() => assertImportPayload(new Uint8Array()));
+  assert.throws(() => assertImportPayload(undefined));
+  const huge = { byteLength: 80 * 1024 * 1024 + 1 } as Uint8Array;
+  assert.throws(() => assertImportPayload(huge));
+  assert.doesNotThrow(() => assertImportPayload(new Uint8Array([1, 2, 3])));
 });
 
 test('byte hash includes length so truncated copies differ', () => {

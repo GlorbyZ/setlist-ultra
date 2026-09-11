@@ -1,0 +1,12 @@
+# EAS upload ignore — keep the archive small and secret-free.
+.env
+.env.*
+.git
+.expo
+android
+ios
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision

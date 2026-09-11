@@ -1,7 +1,7 @@
 {
   "name": "mobile",
   "main": "expo-router/entry",
-  "version": "5.0.5",
+  "version": "5.0.6",
   "private": true,
   "scripts": {
     "preflight": "powershell -ExecutionPolicy Bypass -File ./scripts/preflight.ps1",
@@ -15,7 +15,8 @@
     "web": "expo start --web",
     "web:export": "expo export --platform web --output-dir dist/web",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/ai/ai.test.ts src/lib/ug-api.test.ts src/lib/liveSession.test.ts"
+    "test": "tsx --test src/lib/ai/ai.test.ts src/lib/ug-api.test.ts src/lib/liveSession.test.ts",
+    "eas": "npx --yes eas-cli@16.28.0"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
@@ -31,6 +32,7 @@
     "expo-auth-session": "~57.0.11",
     "expo-constants": "~57.0.17",
     "expo-crypto": "~57.0.2",
+    "expo-dev-client": "~57.0.18",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.6",
     "expo-font": "~57.0.3",
