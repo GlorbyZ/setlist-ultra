@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.9",
+    "version": "5.0.10",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -47,7 +47,7 @@
           }
         ]
       },
-      "buildNumber": "47"
+      "buildNumber": "48"
     },
     "android": {
       "package": "com.setlistultra.app",
@@ -120,7 +120,7 @@
           ]
         }
       ],
-      "versionCode": 66
+      "versionCode": 67
     },
     "web": {
       "bundler": "metro",
@@ -198,9 +198,9 @@
       "supabaseAnonKey": "",
       "managerUrl": "",
       "webAppUrl": "",
-      "privacyPolicyUrl": "",
-      "supportEmail": "epicnigs3@gmail.com",
-      "launchAi": "1",
+      "privacyPolicyUrl": "https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md",
+      "supportEmail": "z@blazedigitaldesign.com",
+      "launchAi": "",
       "launchScan": "",
       "launchAudio": "1",
       "router": {},

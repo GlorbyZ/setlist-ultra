@@ -141,7 +141,7 @@ export default function SettingsScreen() {
       <Pressable style={styles.navRow} onPress={() => router.push('/look')}>
         <View style={styles.toolCopy}>
           <Text style={styles.navTitle}>Presets, chart, Live tools</Text>
-          <Text style={styles.navHint}>Theme, type size, page mode, and which buttons show on stage.</Text>
+          <Text style={styles.navHint}>Theme, type size, hide tab or other sections, and which buttons show on stage.</Text>
         </View>
         <Text style={styles.navChevron}>›</Text>
       </Pressable>

@@ -26,7 +26,7 @@ module.exports = ({ config }) => {
       managerUrl: fromEnv('EXPO_PUBLIC_MANAGER_URL', extra.managerUrl),
       webAppUrl: fromEnv('EXPO_PUBLIC_WEB_APP_URL', extra.webAppUrl),
       privacyPolicyUrl: fromEnv('EXPO_PUBLIC_PRIVACY_URL', extra.privacyPolicyUrl),
-      supportEmail: fromEnv('EXPO_PUBLIC_SUPPORT_EMAIL', extra.supportEmail) || 'epicnigs3@gmail.com',
+      supportEmail: fromEnv('EXPO_PUBLIC_SUPPORT_EMAIL', extra.supportEmail) || 'z@blazedigitaldesign.com',
       launchAi: fromEnv('EXPO_PUBLIC_LAUNCH_AI', extra.launchAi),
       launchScan: fromEnv('EXPO_PUBLIC_LAUNCH_SCAN', extra.launchScan),
       launchAudio: fromEnv('EXPO_PUBLIC_LAUNCH_AUDIO', extra.launchAudio),

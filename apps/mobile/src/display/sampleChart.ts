@@ -38,5 +38,11 @@ export const LOOK_PREVIEW_CHART: SongDocument = {
         },
       ],
     },
+    {
+      id: 't1',
+      kind: 'tab',
+      label: 'Tab',
+      lines: [{ id: 'l4', kind: 'lyric_only', lyric: 'e|---2---|' }],
+    },
   ],
 };

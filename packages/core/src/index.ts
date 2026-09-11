@@ -9,6 +9,7 @@ export * from './chordpro/parse';
 export * from './chordpro/export';
 export * from './chart/jumpTargets';
 export * from './chart/sectionLabels';
+export * from './chart/filterSections';
 export * from './identity/canonicalMap';
 export * from './identity/patchValue';
 export * from './identity/setlistClone';

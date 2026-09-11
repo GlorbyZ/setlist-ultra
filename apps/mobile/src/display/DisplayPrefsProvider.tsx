@@ -62,6 +62,9 @@ export function DisplayPrefsProvider({ children }: { children: ReactNode }) {
         ...patch,
         presetId: patch.presetId ?? 'custom',
         liveButtons: patch.liveButtons ? [...patch.liveButtons] : prefs.liveButtons,
+        hiddenSectionKinds: Array.isArray(patch.hiddenSectionKinds)
+          ? [...patch.hiddenSectionKinds]
+          : prefs.hiddenSectionKinds,
       });
     },
     [persist, prefs],

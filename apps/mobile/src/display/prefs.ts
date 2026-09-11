@@ -1,3 +1,4 @@
+import { sanitizeHiddenSectionKinds, type SectionKind } from '@setlist-ultra/core';
 import { brand, type AppTheme } from '@/src/theme';
 
 export type PresetId = 'stage' | 'practice' | 'teleprompter' | 'compact' | 'custom';
@@ -24,6 +25,8 @@ export type DisplayPrefs = {
   highContrast: boolean;
   liveButtons: LiveButtonId[];
   appBarMode: AppBarMode;
+  /** Section kinds omitted from Live / song view. Empty means show everything. */
+  hiddenSectionKinds: SectionKind[];
 };
 
 export const DEFAULT_LIVE_BUTTONS: LiveButtonId[] = [
@@ -61,6 +64,7 @@ export const DEFAULT_PREFS: DisplayPrefs = {
   highContrast: false,
   liveButtons: [...DEFAULT_LIVE_BUTTONS],
   appBarMode: 'auto-hide',
+  hiddenSectionKinds: [],
 };
 
 export type NamedPreset = Exclude<PresetId, 'custom'>;
@@ -113,8 +117,24 @@ const PRESETS: Record<NamedPreset, DisplayPrefs> = {
   },
 };
 
+export { toggleHiddenSectionKind } from '@setlist-ultra/core';
+
+export const CHART_SECTION_TOGGLES: { kind: SectionKind; label: string; hint: string }[] = [
+  { kind: 'tab', label: 'Tab', hint: 'Guitar tab blocks' },
+  { kind: 'comment', label: 'Comments', hint: 'Notes and annotations' },
+  { kind: 'verse', label: 'Verse', hint: 'Verse sections' },
+  { kind: 'chorus', label: 'Chorus', hint: 'Chorus sections' },
+  { kind: 'bridge', label: 'Bridge', hint: 'Bridge sections' },
+  { kind: 'unknown', label: 'Other', hint: 'Intro, solo, and unlabeled blocks' },
+];
+
 export function prefsFromPreset(id: NamedPreset): DisplayPrefs {
-  return { ...PRESETS[id], liveButtons: [...PRESETS[id].liveButtons] };
+  const preset = PRESETS[id];
+  return {
+    ...preset,
+    liveButtons: [...preset.liveButtons],
+    hiddenSectionKinds: [...(preset.hiddenSectionKinds ?? [])],
+  };
 }
 
 export function clampFontSize(size: number) {
@@ -126,7 +146,9 @@ export function clampChartPadding(size: number) {
 }
 
 export function parseDisplayPrefs(raw: unknown): DisplayPrefs {
-  if (!raw || typeof raw !== 'object') return { ...DEFAULT_PREFS, liveButtons: [...DEFAULT_LIVE_BUTTONS] };
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_PREFS, liveButtons: [...DEFAULT_LIVE_BUTTONS], hiddenSectionKinds: [] };
+  }
   const row = raw as Partial<DisplayPrefs>;
   const buttons = Array.isArray(row.liveButtons)
     ? row.liveButtons.filter((id): id is LiveButtonId => ALL_LIVE_BUTTONS.some((item) => item.id === id))
@@ -151,6 +173,7 @@ export function parseDisplayPrefs(raw: unknown): DisplayPrefs {
     lyricsOnlyDefault: Boolean(row.lyricsOnlyDefault),
     highContrast: Boolean(row.highContrast),
     liveButtons: buttons.length ? buttons : [...DEFAULT_LIVE_BUTTONS],
+    hiddenSectionKinds: sanitizeHiddenSectionKinds(row.hiddenSectionKinds),
   };
 }
 

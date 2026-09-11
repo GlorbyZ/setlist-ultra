@@ -42,7 +42,7 @@ export const config = {
   managerUrl: resolveManagerUrl(),
   webAppUrl: fromEnv('EXPO_PUBLIC_WEB_APP_URL') || extra('webAppUrl'),
   privacyPolicyUrl: fromEnv('EXPO_PUBLIC_PRIVACY_URL') || extra('privacyPolicyUrl'),
-  supportEmail: fromEnv('EXPO_PUBLIC_SUPPORT_EMAIL') || extra('supportEmail') || 'epicnigs3@gmail.com',
+  supportEmail: fromEnv('EXPO_PUBLIC_SUPPORT_EMAIL') || extra('supportEmail') || 'z@blazedigitaldesign.com',
 };
 
 export function isHostedConfigured(): boolean {

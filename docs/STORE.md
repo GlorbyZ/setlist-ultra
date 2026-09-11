@@ -2,6 +2,20 @@
 
 Paste into Play Console / App Store Connect. Do not claim Songbook Pro affiliation, native MIDI on phones, in-app PDF annotation, lossless media backup, or catalog availability beyond what the binary actually enables.
 
+## Create app (Play Console)
+
+Package name is permanent after this screen. Fill:
+
+| Field | Value |
+|---|---|
+| App name | Setlist Ultra |
+| Package name | `com.setlistultra.app` |
+| Default language | English (United States) – en-US |
+| App or game | **App** |
+| Free or paid | **Free** (cannot switch to paid after publish) |
+
+Later in Store settings: support **z@blazedigitaldesign.com**. Contains ads: **No**. Target audience: 13+ (not designed for children). Privacy policy URL: https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md
+
 **Title:** Setlist Ultra  
 **Short description:** Your songs, setlists, and chord charts—ready for the stage.  
 **Opening / long description:**
@@ -12,8 +26,10 @@ Import ChordPro and Songbook Pro `.sbp` / `.sbpbackup` files, edit charts, and s
 
 GitHub APKs and Google Play builds use different signing keys. Uninstall a sideloaded APK before installing from Play, or updates will fail. Export a `.sbpbackup` first if you need to move the library.
 
-**Support email:** epicnigs3@gmail.com  
-**Privacy:** in-app Settings → Privacy, and `docs/privacy.md`. Host a public HTTPS copy before Play submission.
+**Support email:** z@blazedigitaldesign.com  
+**Privacy:** https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md (also in-app Settings → Privacy).
+
+Play Store V1 (EAS `production`) does **not** enable the Assist tab. GitHub sideload APKs may still set `EXPO_PUBLIC_LAUNCH_AI=1`.
 
 ## Data safety inventory (Play Console)
 
@@ -24,10 +40,10 @@ Answer from this table. “Offline-first” is not “collects no data.”
 | App activity (songs/sets you create) | Yes, on device | No, unless you enable cloud sync | Local SQLite |
 | Files and docs (imports, backups, attachments) | Yes, on device | No | App private storage |
 | Audio files you attach | Yes, on device | No | Not included in `.sbpbackup` |
-| Photos / camera (scan) | Only if you pick an image | No unless you later send it via AI | Optional |
+| Photos / camera (scan) | Only if you pick an image | No | Optional |
 | Account email / Google identity | Only if you sign in to cloud sync | Hosted backend (Supabase) when configured | Optional |
 | Search queries (UG catalog) | Only if you search the catalog | Catalog proxy | Optional |
-| AI prompts / chart snippets | Only if you use BYOK AI | Your chosen provider | Optional; key stays on device |
+| AI prompts / chart snippets | No in Play V1 | — | Assist is off in the store binary |
 | Location, contacts, ads ID, payment info | No | — | — |
 
 Encryption in transit: HTTPS for optional network features. Encryption at rest: OS app storage; cloud follows the hosted provider when enabled.

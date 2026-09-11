@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import type { SongDocument } from '@setlist-ultra/core';
-import { chartJumpTargets } from '@setlist-ultra/core';
+import { chartJumpTargets, filterChartSections } from '@setlist-ultra/core';
 import { ChordLyricLine } from './ChordLyricLine';
 import { Text } from '@/components/Themed';
 import { DEFAULT_AUTOSCROLL_SECONDS } from '@/src/lib/autoscroll';
@@ -61,7 +61,14 @@ export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewe
   const lineRelYRef = useRef<Record<string, { sectionId: string; y: number }>>({});
   const jumpYRef = useRef<Record<string, number>>({});
 
-  const targets = useMemo(() => chartJumpTargets(document), [document]);
+  const targets = useMemo(
+    () => chartJumpTargets(filterChartSections(document, prefs.hiddenSectionKinds)),
+    [document, prefs.hiddenSectionKinds],
+  );
+  const visibleDocument = useMemo(
+    () => filterChartSections(document, prefs.hiddenSectionKinds),
+    [document, prefs.hiddenSectionKinds],
+  );
   const targetIds = useMemo(() => new Set(targets.map((t) => t.id)), [targets]);
 
   const recomputeJumpY = () => {
@@ -157,7 +164,7 @@ export const SongViewer = forwardRef<SongViewerHandle, Props>(function SongViewe
         scrollEventThrottle={16}
         onContentSizeChange={(_, h) => setContentH(h)}
         onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}>
-        {document.sections.map((section) => (
+        {visibleDocument.sections.map((section) => (
           <View
             key={section.id}
             style={styles.section}

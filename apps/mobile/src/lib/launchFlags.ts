@@ -15,7 +15,7 @@ function extra(name: string): string {
  * and fall back to `extra` baked at prebuild (GitHub APKs set these in CI).
  */
 export const launchFlags = {
-  /** BYOK AI tab + settings. Off in store binaries unless EXPO_PUBLIC_LAUNCH_AI=1. */
+  /** Assist tab + settings. Off in Play/store unless EXPO_PUBLIC_LAUNCH_AI=1. */
   get ai() {
     return resolveBinaryFlag(
       process.env.EXPO_PUBLIC_LAUNCH_AI,

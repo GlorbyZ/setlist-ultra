@@ -6,11 +6,13 @@ import { ChartStylePreview } from '@/src/components/ChartStylePreview';
 import { useDisplayPrefs } from '@/src/display/DisplayPrefsProvider';
 import {
   ALL_LIVE_BUTTONS,
+  CHART_SECTION_TOGGLES,
   PRESET_INFO,
   chordModeFromPrefs,
   clampChartPadding,
   clampFontSize,
   prefsForChordMode,
+  toggleHiddenSectionKind,
   type LayoutMode,
   type LiveButtonId,
   type LongLines,
@@ -172,6 +174,22 @@ export default function LookAndStageScreen() {
         on={prefs.showSectionHeaders}
         onPress={() => patchPrefs({ showSectionHeaders: !prefs.showSectionHeaders })}
       />
+
+      <Text style={styles.lede}>Sections</Text>
+      <Text style={styles.hint}>Turn off a kind to hide it on Live and song view. Jump skips hidden blocks.</Text>
+      {CHART_SECTION_TOGGLES.map((item) => {
+        const on = !prefs.hiddenSectionKinds.includes(item.kind);
+        return (
+          <ToggleRow
+            key={item.kind}
+            styles={styles}
+            label={item.label}
+            hint={item.hint}
+            on={on}
+            onPress={() => patchPrefs({ hiddenSectionKinds: toggleHiddenSectionKind(prefs.hiddenSectionKinds, item.kind) })}
+          />
+        );
+      })}
 
       <Text style={styles.lede}>Long lines</Text>
       <View style={styles.rowWrap}>

@@ -2,6 +2,7 @@ import { Linking, Pressable, ScrollView, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import { config } from '@/src/lib/config';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
 export default function PrivacyScreen() {
@@ -17,9 +18,11 @@ export default function PrivacyScreen() {
       </Text>
       <Text style={styles.body}>
         Files you import stay on the device. Optional Ultimate Guitar search sends the query you type to our catalog
-        proxy. Optional cloud sync (when configured and signed in) stores library data with the hosted backend. Optional
-        AI uses a key you provide on this device and sends the prompts you choose to that provider. Camera and photo
-        access are used only when you pick a scan or image.
+        proxy. Optional cloud sync (when configured and signed in) stores library data with the hosted backend.
+        {launchFlags.ai
+          ? ' Optional AI uses a key you provide on this device and sends the prompts you choose to that provider.'
+          : ''}{' '}
+        Camera and photo access are used only when you pick a scan or image.
       </Text>
       <Text style={styles.body}>
         Local backups (.sbpbackup) include songs and sets, not attached audio or PDFs. We do not include ads or
