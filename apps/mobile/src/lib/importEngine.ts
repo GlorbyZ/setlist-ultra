@@ -3,7 +3,6 @@ import {
   archiveSourceKey,
   detectImportFormat,
   foldArrangementTitle,
-  formatImportLabel,
   hashImportBytes,
   parseChordPro,
   parseSbpArchive,
@@ -12,6 +11,7 @@ import {
 import { folders, importJobs, setlistItems, setlists, songs } from '@setlist-ultra/db';
 import { getDatabase } from './db';
 import { ensureWorkspaceForScope, workspaceIdForScope, type LibraryScope } from './domain';
+import { persistMediaFile } from './mediaStore';
 import {
   findSongByTitleArtist,
   getImportJob,
@@ -471,7 +471,47 @@ export async function importSbpArchive(
 export async function importAnyChartFile(bytes: Uint8Array, filename?: string, options?: ImportOptions) {
   const format = detectImportFormat(bytes, filename);
   if (format === 'pdf') {
-    throw new Error(`${formatImportLabel(format)} import is not available yet.`);
+    throwIfAborted(options?.signal);
+    const hash = hashImportBytes(bytes);
+    const title = (filename ?? 'PDF chart').replace(/\.pdf$/i, '') || 'PDF chart';
+    const uri = await persistMediaFile('pdf', bytes, 'pdf', hash);
+    const chordpro = `{title: ${title}}\n{comment: PDF chart. Open with a PDF app — in-app annotation is not in this build.}`;
+    const inserted = await insertLibrarySongResult({
+      title,
+      artist: '',
+      chordpro,
+      contentKind: 'pdf',
+      mediaUri: uri,
+      importSource: 'pdf',
+      sourceProvider: 'pdf',
+      sourceExternalId: hash,
+    });
+    options?.onProgress?.({
+      phase: 'done',
+      totalSongs: 1,
+      processedSongs: 1,
+      created: inserted.outcome === 'created' ? 1 : 0,
+      reused: inserted.outcome === 'reused' ? 1 : 0,
+      variants: 0,
+      skipped: 0,
+      failed: 0,
+      currentTitle: title,
+      status: 'completed',
+    });
+    return {
+      kind: 'song' as const,
+      songId: inserted.id,
+      songs: 1,
+      sets: 0,
+      folders: 0,
+      created: inserted.outcome === 'created' ? 1 : 0,
+      reused: inserted.outcome === 'reused' ? 1 : 0,
+      variants: 0,
+      skipped: 0,
+      failed: 0,
+      hashOk: true,
+      status: 'completed' as const,
+    };
   }
   if (format === 'unknown') {
     throw new Error('This file is not a Songbook Pro archive or ChordPro chart.');

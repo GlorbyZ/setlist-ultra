@@ -1,7 +1,9 @@
-﻿import { useCallback, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 
 import { isNativeDbDead, recoverDatabase } from '@/src/lib/db';
+import { mergeFollowQueue } from '@/src/lib/liveSession';
 import {
   getAppState,
   getSetlist,
@@ -13,17 +15,31 @@ import {
 } from '@/src/lib/repository';
 import type { SongRow } from '@setlist-ultra/db';
 
+const FOLLOW_KEY = 'setlist-ultra.live.followBand';
+
 export type LiveSetContext = {
   id: string;
   title: string;
   eventDate: string | null;
+  libraryKind: string;
+  orgId: string | null;
 };
+
+async function readFollowPref() {
+  try {
+    return (await SecureStore.getItemAsync(FOLLOW_KEY)) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export function useLiveQueue(preferredSongId?: string) {
   const [queue, setQueue] = useState<SongRow[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [setContext, setSetContext] = useState<LiveSetContext | null>(null);
+  const [followBand, setFollowBandState] = useState(false);
+  const songRef = useRef<SongRow | null>(null);
 
   const reload = useCallback(async () => {
     const load = async () => {
@@ -36,7 +52,13 @@ export function useLiveQueue(preferredSongId?: string) {
       if (state.currentSetlistId) {
         const setRow = await getSetlist(state.currentSetlistId);
         if (setRow) {
-          nextSet = { id: setRow.id, title: setRow.title, eventDate: setRow.eventDate ?? null };
+          nextSet = {
+            id: setRow.id,
+            title: setRow.title,
+            eventDate: setRow.eventDate ?? null,
+            libraryKind: setRow.libraryKind,
+            orgId: setRow.orgId ?? null,
+          };
         }
         const items = await getSetlistItems(state.currentSetlistId);
         const songIds = items
@@ -98,14 +120,46 @@ export function useLiveQueue(preferredSongId?: string) {
   const reloadRef = useRef(reload);
   reloadRef.current = reload;
 
+  const refreshFollow = useCallback(async () => {
+    const state = await getAppState();
+    if (!state.currentSetlistId) return;
+    const items = await getSetlistItems(state.currentSetlistId);
+    const songIds = items
+      .filter((item) => item.itemType === 'song' && item.songId)
+      .map((item) => item.songId as string);
+    const incoming = await getSongsByIds(songIds);
+    const merged = mergeFollowQueue(songRef.current, incoming);
+    setQueue(merged.queue);
+    setIndex(merged.index);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       void reloadRef.current();
+      void readFollowPref().then(setFollowBandState);
     }, []),
   );
 
+  const setFollowBand = useCallback(async (next: boolean) => {
+    setFollowBandState(next);
+    try {
+      await SecureStore.setItemAsync(FOLLOW_KEY, next ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!followBand || !setContext) return;
+    const timer = setInterval(() => {
+      void refreshFollow();
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [followBand, setContext, refreshFollow]);
+
   const song = queue[index] ?? null;
+  songRef.current = song;
 
   const go = useCallback(
     (dir: -1 | 1) => {
@@ -138,5 +192,7 @@ export function useLiveQueue(preferredSongId?: string) {
     reload,
     setContext,
     hasSetContext: Boolean(setContext) && queue.length > 0,
+    followBand,
+    setFollowBand,
   };
 }

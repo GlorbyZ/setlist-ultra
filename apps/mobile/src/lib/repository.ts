@@ -605,7 +605,10 @@ export async function updateSong(
     notesText?: string;
     webUrl?: string;
     tags?: string;
-    midiOnLoad?: string;
+    midiOnLoad?: string | null;
+    linkedAudio?: string | null;
+    mediaUri?: string | null;
+    contentKind?: string;
     syncStatus?: string;
     remoteId?: string;
   },
@@ -670,7 +673,10 @@ export async function updateSong(
         notesText: patch.notesText ?? row.notesText,
         webUrl: patch.webUrl ?? row.webUrl,
         tags: patch.tags ?? row.tags,
-        midiOnLoad: patch.midiOnLoad ?? row.midiOnLoad,
+        midiOnLoad: patch.midiOnLoad !== undefined ? patch.midiOnLoad : row.midiOnLoad,
+        linkedAudio: patch.linkedAudio !== undefined ? patch.linkedAudio : row.linkedAudio,
+        mediaUri: patch.mediaUri !== undefined ? patch.mediaUri : row.mediaUri,
+        contentKind: patch.contentKind ?? row.contentKind,
         chordpro,
         contentAst,
         contentHash,

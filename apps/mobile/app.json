@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.3",
+    "version": "5.0.4",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -47,7 +47,7 @@
           }
         ]
       },
-      "buildNumber": "42"
+      "buildNumber": "43"
     },
     "android": {
       "package": "com.setlistultra.app",
@@ -69,6 +69,7 @@
             { "mimeType": "application/x-zip" },
             { "mimeType": "application/x-zip-compressed" },
             { "mimeType": "application/octet-stream" },
+            { "mimeType": "application/pdf" },
             { "mimeType": "text/*" }
           ]
         },
@@ -80,12 +81,14 @@
             { "scheme": "content", "mimeType": "application/zip" },
             { "scheme": "content", "mimeType": "application/x-zip" },
             { "scheme": "content", "mimeType": "application/x-zip-compressed" },
+            { "scheme": "content", "mimeType": "application/pdf" },
             { "scheme": "content", "mimeType": "text/plain" },
             { "scheme": "content", "mimeType": "text/*" },
             { "scheme": "file", "mimeType": "application/octet-stream" },
             { "scheme": "file", "mimeType": "application/zip" },
             { "scheme": "file", "mimeType": "application/x-zip" },
             { "scheme": "file", "mimeType": "application/x-zip-compressed" },
+            { "scheme": "file", "mimeType": "application/pdf" },
             { "scheme": "file", "mimeType": "text/plain" },
             { "scheme": "file", "mimeType": "text/*" }
           ]
@@ -94,6 +97,7 @@
           "action": "VIEW",
           "category": ["DEFAULT", "BROWSABLE"],
           "data": [
+            { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.pdf" },
             { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbp" },
             { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbpbackup" },
             { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.cho" },
@@ -103,6 +107,7 @@
             { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.pro" },
             { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.txt" },
             { "scheme": "content", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.zip" },
+            { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.pdf" },
             { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbp" },
             { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.sbpbackup" },
             { "scheme": "file", "host": "*", "mimeType": "*/*", "pathPattern": ".*\\\\.cho" },
@@ -115,7 +120,7 @@
           ]
         }
       ],
-      "versionCode": 60
+      "versionCode": 61
     },
     "web": {
       "bundler": "metro",
@@ -162,11 +167,20 @@
             "application/x-zip",
             "application/x-zip-compressed",
             "application/octet-stream",
-            "text/*"
+            "text/*",
+            "application/pdf"
           ]
         }
       ],
       "expo-sharing",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
       "expo-font",
       "expo-status-bar",
       "expo-web-browser"

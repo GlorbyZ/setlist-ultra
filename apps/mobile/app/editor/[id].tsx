@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 
 import { Text } from '@/components/Themed';
-import { KEY_OPTIONS } from '@setlist-ultra/core';
+import { KEY_OPTIONS, hashImportBytes } from '@setlist-ultra/core';
 import { copySongToLibrary, getLibraryScope, getSong, updateSong } from '@/src/lib/repository';
+import { pickBinaryFile } from '@/src/lib/files';
+import { persistMediaFile } from '@/src/lib/mediaStore';
+import { parseMidiOnLoad, serializeMidiOnLoad } from '@/src/lib/midi';
 import { openSongInLive } from '@/src/lib/openSongInLive';
 import { printSong } from '@/src/lib/print';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -37,6 +40,10 @@ export default function EditorScreen() {
   const [notes, setNotes] = useState('');
   const [url, setUrl] = useState('');
   const [tags, setTags] = useState('');
+  const [midiChannel, setMidiChannel] = useState('1');
+  const [midiProgram, setMidiProgram] = useState('');
+  const [midiNote, setMidiNote] = useState('');
+  const [audioLabel, setAudioLabel] = useState('None');
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +63,11 @@ export default function EditorScreen() {
       setNotes(row.notesText ?? '');
       setUrl(row.webUrl ?? row.sourceUrl ?? '');
       setTags(row.tags ?? '');
+      const midi = parseMidiOnLoad(row.midiOnLoad);
+      setMidiChannel(String(midi?.channel ?? 1));
+      setMidiProgram(midi?.program != null ? String(midi.program) : '');
+      setMidiNote(midi?.note != null ? String(midi.note) : '');
+      setAudioLabel(row.linkedAudio ? 'Attached' : 'None');
     })();
   }, [id]);
 
@@ -63,6 +75,16 @@ export default function EditorScreen() {
     if (!id) return;
     setSaving(true);
     try {
+      const program = midiProgram.trim() ? Number.parseInt(midiProgram, 10) : undefined;
+      const note = midiNote.trim() ? Number.parseInt(midiNote, 10) : undefined;
+      const midi =
+        program != null || note != null
+          ? serializeMidiOnLoad({
+              channel: Number.parseInt(midiChannel, 10) || 1,
+              program: Number.isFinite(program) ? program : undefined,
+              note: Number.isFinite(note) ? note : undefined,
+            })
+          : '';
       await updateSong(id, {
         title,
         artist,
@@ -75,6 +97,7 @@ export default function EditorScreen() {
         webUrl: url,
         tags,
         chordpro,
+        midiOnLoad: midi || null,
       });
       setDirty(false);
       await refresh();
@@ -150,6 +173,39 @@ export default function EditorScreen() {
           placeholder="Stage notes"
           placeholderTextColor={theme.faint}
         />
+        <Text style={styles.label}>Backing track</Text>
+        <Text style={styles.hintInline}>{audioLabel} · local file only, not a DAW</Text>
+        <Pressable
+          style={styles.ghost}
+          onPress={() =>
+            void (async () => {
+              const picked = await pickBinaryFile('.mp3,.m4a,.wav,.aac,.ogg');
+              if (!picked || !id) return;
+              const ext = (picked.name.split('.').pop() || 'mp3').toLowerCase();
+              const uri = await persistMediaFile('audio', picked.bytes, ext, hashImportBytes(picked.bytes));
+              await updateSong(id, { linkedAudio: uri });
+              setAudioLabel(picked.name);
+              setDirty(false);
+              await refresh();
+            })()
+          }>
+          <Text style={styles.ghostText}>Attach audio</Text>
+        </Pressable>
+        <Text style={styles.label}>MIDI on load (Web MIDI when available)</Text>
+        <View style={styles.metaRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Channel</Text>
+            <TextInput style={styles.input} keyboardType="number-pad" value={midiChannel} onChangeText={(v) => { setMidiChannel(v); setDirty(true); }} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Program</Text>
+            <TextInput style={styles.input} keyboardType="number-pad" value={midiProgram} onChangeText={(v) => { setMidiProgram(v); setDirty(true); }} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Note</Text>
+            <TextInput style={styles.input} keyboardType="number-pad" value={midiNote} onChangeText={(v) => { setMidiNote(v); setDirty(true); }} />
+          </View>
+        </View>
         <Text style={styles.label}>ChordPro</Text>
         <TextInput
           style={[styles.input, styles.editor]}
@@ -192,6 +248,7 @@ function makeStyles(t: AppTheme) {
       gap: 8,
     },
     hint: { color: t.muted, flex: 1, fontWeight: '600' as const },
+    hintInline: { color: t.muted, fontSize: 12, marginBottom: 6 },
     save: { backgroundColor: t.accent, borderRadius: t.radius.md, paddingHorizontal: 16, paddingVertical: 10 },
     saveText: { color: t.accentText, fontWeight: '800' as const },
     ghost: { paddingHorizontal: 12, paddingVertical: 10 },

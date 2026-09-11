@@ -11,8 +11,8 @@
 ```bash
 npm run preflight
 npm run typecheck
-git tag v5.0.3
-git push origin v5.0.3
+git tag v5.0.4
+git push origin v5.0.4
 ```
 
 GitHub Actions (`.github/workflows/android-release.yml`) will:

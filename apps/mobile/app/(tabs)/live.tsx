@@ -1,6 +1,7 @@
 ﻿import { type Href, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useAudioPlayer } from 'expo-audio';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { LiveChrome } from '@/src/components/LiveChrome';
@@ -21,6 +22,7 @@ import {
 import { useKeepAwake } from 'expo-keep-awake';
 import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
 import { liveScrollFor, rememberLiveScroll } from '@/src/lib/liveSession';
+import { openLocalMedia } from '@/src/lib/mediaStore';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -31,13 +33,16 @@ export default function LiveTab() {
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   useKeepAwake();
-  const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue();
+  const { queue, index, song, loading, go, goTo, setContext, hasSetContext, followBand, setFollowBand } = useLiveQueue();
   const { fontSize, setFontSize, hideChords, setHideChords } = useLiveChartSession();
   const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
   const [scrolling, setScrolling] = useState(false);
   const [setlistOpen, setSetlistOpen] = useState(false);
   const viewerRef = useRef<SongViewerHandle>(null);
+  const audioSource = song?.linkedAudio ? { uri: song.linkedAudio } : undefined;
+  const audioPlayer = useAudioPlayer(audioSource);
+  const [audioPlaying, setAudioPlaying] = useState(false);
 
   const prevSong = index > 0 ? queue[index - 1] : null;
   const nextSong = index < queue.length - 1 ? queue[index + 1] : null;
@@ -54,6 +59,7 @@ export default function LiveTab() {
     setKeyShift(song.keyShift ?? 0);
     setScrolling(false);
     if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
+    setAudioPlaying(false);
   }, [song?.id]);
 
   useEffect(() => {
@@ -188,6 +194,42 @@ export default function LiveTab() {
 
   return (
     <View style={{ flex: 1 }}>
+      {hasSetContext ? (
+        <View style={styles.followBar}>
+          <Text style={styles.followText}>
+            {followBand
+              ? 'Following set order (this chart stays until you swipe)'
+              : setContext?.orgId
+                ? 'Band set'
+                : 'Set'}
+          </Text>
+          <Pressable onPress={() => void setFollowBand(!followBand)}>
+            <Text style={styles.followAction}>{followBand ? 'Stop follow' : 'Follow set'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {song.contentKind === 'pdf' && song.mediaUri ? (
+        <Pressable
+          style={styles.mediaBar}
+          onPress={() => void openLocalMedia(song.mediaUri!, 'application/pdf', song.title)}>
+          <Text style={styles.mediaBarText}>Open PDF in another app (no in-app markup)</Text>
+        </Pressable>
+      ) : null}
+      {song.linkedAudio ? (
+        <Pressable
+          style={styles.mediaBar}
+          onPress={() => {
+            if (audioPlaying) {
+              audioPlayer.pause();
+              setAudioPlaying(false);
+            } else {
+              audioPlayer.play();
+              setAudioPlaying(true);
+            }
+          }}>
+          <Text style={styles.mediaBarText}>{audioPlaying ? 'Pause backing track' : 'Play backing track'}</Text>
+        </Pressable>
+      ) : null}
       <LiveChrome
         chromeKey={song.id}
         tempo={song.tempo}
@@ -253,6 +295,26 @@ function makeStyles(t: AppTheme) {
       lineHeight: t.type.body.lineHeight,
       fontWeight: t.type.body.fontWeight,
     },
+    followBar: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'space-between' as const,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+      backgroundColor: t.panel,
+    },
+    followText: { color: t.muted, fontSize: 12, flex: 1, paddingRight: 8 },
+    followAction: { color: t.accent, fontWeight: '700' as const, fontSize: 13 },
+    mediaBar: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+      backgroundColor: t.panel,
+    },
+    mediaBarText: { color: t.accent, fontWeight: '700' as const, fontSize: 13 },
   };
 }
 
