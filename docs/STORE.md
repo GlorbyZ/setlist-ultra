@@ -29,7 +29,7 @@ GitHub APKs and Google Play builds use different signing keys. Uninstall a sidel
 **Support email:** z@blazedigitaldesign.com  
 **Privacy:** https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md (also in-app Settings → Privacy).
 
-Play Store V1 (EAS `production`) does **not** enable the Assist tab. GitHub sideload APKs may still set `EXPO_PUBLIC_LAUNCH_AI=1`.
+Play Store V1 and GitHub APKs do **not** enable the Assist tab. Assist stays off unless `EXPO_PUBLIC_LAUNCH_AI=1` is set on purpose.
 
 ## Data safety inventory (Play Console)
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.10",
+    "version": "5.0.11",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -47,7 +47,7 @@
           }
         ]
       },
-      "buildNumber": "48"
+      "buildNumber": "49"
     },
     "android": {
       "package": "com.setlistultra.app",
@@ -120,7 +120,7 @@
           ]
         }
       ],
-      "versionCode": 67
+      "versionCode": 68
     },
     "web": {
       "bundler": "metro",

@@ -13,7 +13,6 @@
       },
       "env": {
         "EXPO_PUBLIC_UG_PROXY_URL": "https://ug.bigzay.com",
-        "EXPO_PUBLIC_LAUNCH_AI": "1",
         "EXPO_PUBLIC_LAUNCH_SCAN": "1"
       }
     },
@@ -28,7 +27,6 @@
       },
       "env": {
         "EXPO_PUBLIC_UG_PROXY_URL": "https://ug.bigzay.com",
-        "EXPO_PUBLIC_LAUNCH_AI": "1",
         "EXPO_PUBLIC_LAUNCH_SCAN": "1"
       }
     },

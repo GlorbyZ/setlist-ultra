@@ -15,13 +15,9 @@ function extra(name: string): string {
  * and fall back to `extra` baked at prebuild (GitHub APKs set these in CI).
  */
 export const launchFlags = {
-  /** Assist tab + settings. Off in Play/store unless EXPO_PUBLIC_LAUNCH_AI=1. */
+  /** Assist tab + settings. Off unless EXPO_PUBLIC_LAUNCH_AI=1 is set explicitly. */
   get ai() {
-    return resolveBinaryFlag(
-      process.env.EXPO_PUBLIC_LAUNCH_AI,
-      extra('launchAi'),
-      typeof __DEV__ !== 'undefined' && __DEV__,
-    );
+    return resolveBinaryFlag(process.env.EXPO_PUBLIC_LAUNCH_AI, extra('launchAi'), false);
   },
   /** Camera/image “scan” placeholder. Not OCR. */
   get scan() {

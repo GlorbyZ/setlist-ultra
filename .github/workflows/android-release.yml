@@ -14,10 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_UG_PROXY_URL: https://ug.bigzay.com
-      EXPO_PUBLIC_AI_GATEWAY_URL: https://ai.bigzay.com
       EXPO_PUBLIC_SUPPORT_EMAIL: z@blazedigitaldesign.com
       EXPO_PUBLIC_PRIVACY_URL: https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md
-      EXPO_PUBLIC_LAUNCH_AI: "1"
       EXPO_PUBLIC_LAUNCH_SCAN: "1"
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
@@ -58,10 +56,8 @@ jobs:
         run: |
           printf '%s\n' \
             'EXPO_PUBLIC_UG_PROXY_URL=https://ug.bigzay.com' \
-            'EXPO_PUBLIC_AI_GATEWAY_URL=https://ai.bigzay.com' \
             'EXPO_PUBLIC_SUPPORT_EMAIL=z@blazedigitaldesign.com' \
             'EXPO_PUBLIC_PRIVACY_URL=https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md' \
-            'EXPO_PUBLIC_LAUNCH_AI=1' \
             'EXPO_PUBLIC_LAUNCH_SCAN=1' \
             > .env
 
@@ -76,10 +72,8 @@ jobs:
         env:
           NODE_ENV: production
           EXPO_PUBLIC_UG_PROXY_URL: https://ug.bigzay.com
-          EXPO_PUBLIC_AI_GATEWAY_URL: https://ai.bigzay.com
           EXPO_PUBLIC_SUPPORT_EMAIL: z@blazedigitaldesign.com
           EXPO_PUBLIC_PRIVACY_URL: https://github.com/GlorbyZ/setlist-ultra/blob/main/docs/privacy.md
-          EXPO_PUBLIC_LAUNCH_AI: "1"
           EXPO_PUBLIC_LAUNCH_SCAN: "1"
         run: ./gradlew assembleRelease --no-daemon
 

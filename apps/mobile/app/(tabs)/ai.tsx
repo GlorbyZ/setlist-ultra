@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -47,13 +47,7 @@ import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 type Phase = 'home' | 'setup' | 'working' | 'review' | 'applied';
 
 export default function AssistScreen() {
-  if (!launchFlags.ai) {
-    return (
-      <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
-        <Text>Assist is off in this build.</Text>
-      </View>
-    );
-  }
+  if (!launchFlags.ai) return <Redirect href="/" />;
   return <AssistScreenInner />;
 }
 
