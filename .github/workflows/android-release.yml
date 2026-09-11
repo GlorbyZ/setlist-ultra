@@ -50,6 +50,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Write public Expo env for the embedded bundle
+        working-directory: apps/mobile
+        run: |
+          printf '%s\n' \
+            'EXPO_PUBLIC_UG_PROXY_URL=https://ug.bigzay.com' \
+            'EXPO_PUBLIC_LAUNCH_AI=1' \
+            'EXPO_PUBLIC_LAUNCH_SCAN=1' \
+            > .env
+
       - name: Prebuild Android
         working-directory: apps/mobile
         env:
@@ -60,6 +69,9 @@ jobs:
         working-directory: apps/mobile/android
         env:
           NODE_ENV: production
+          EXPO_PUBLIC_UG_PROXY_URL: https://ug.bigzay.com
+          EXPO_PUBLIC_LAUNCH_AI: "1"
+          EXPO_PUBLIC_LAUNCH_SCAN: "1"
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Verify embedded JS bundle

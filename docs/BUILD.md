@@ -37,8 +37,8 @@ npm run mobile          # or: npm run mobile:clear after native builds
 ## Ship an APK (recommended)
 
 ```bash
-git tag v5.0.7
-git push origin v5.0.7
+git tag v5.0.8
+git push origin v5.0.8
 ```
 
 CI workflow `.github/workflows/android-release.yml` builds and attaches `setlist-ultra-android.apk`.

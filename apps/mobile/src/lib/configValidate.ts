@@ -29,3 +29,11 @@ export function isPublicServiceUrl(value: string): boolean {
   const host = new URL(sanitizeConfigValue(value)).hostname;
   return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1';
 }
+
+/** Release binaries only enable optional surfaces when env/extra is an explicit yes. */
+export function resolveBinaryFlag(envValue: unknown, extraValue: unknown, isDev: boolean): boolean {
+  const raw = (sanitizeConfigValue(envValue) || sanitizeConfigValue(extraValue)).toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return isDev;
+}

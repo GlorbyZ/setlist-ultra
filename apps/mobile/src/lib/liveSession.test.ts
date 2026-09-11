@@ -7,7 +7,7 @@ import {
   pickLiveIndex,
 } from './liveSession';
 import { midiOnLoadFrames, midiOutputsAvailable, parseMidiOnLoad, serializeMidiOnLoad } from './midi';
-import { isPublicServiceUrl, isUsableHttpUrl, sanitizeConfigValue } from './configValidate';
+import { isPublicServiceUrl, isUsableHttpUrl, resolveBinaryFlag, sanitizeConfigValue } from './configValidate';
 
 test('mergeFollowQueue keeps the on-stage song row even if the incoming copy changed', () => {
   const current = { id: 'a', title: 'On stage' };
@@ -105,4 +105,11 @@ test('sanitizeConfigValue drops unresolved Expo placeholders', () => {
   assert.equal(isUsableHttpUrl('${EXPO_PUBLIC_UG_PROXY_URL}'), false);
   assert.equal(isPublicServiceUrl('http://localhost:3848'), false);
   assert.equal(isPublicServiceUrl('https://ug.bigzay.com'), true);
+});
+
+test('resolveBinaryFlag enables AI from extra when process.env was not inlined', () => {
+  assert.equal(resolveBinaryFlag(undefined, '1', false), true);
+  assert.equal(resolveBinaryFlag('', '', false), false);
+  assert.equal(resolveBinaryFlag('', '', true), true);
+  assert.equal(resolveBinaryFlag('0', '1', true), false);
 });

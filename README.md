@@ -30,7 +30,7 @@ Full process: **[docs/BUILD.md](docs/BUILD.md)** · Hosted catalog: **[services/
 
 ```bash
 npm run preflight && npm run typecheck && npm test
-git tag v5.0.7 && git push origin v5.0.7
+git tag v5.0.8 && git push origin v5.0.8
 ```
 
 ## Project layout
