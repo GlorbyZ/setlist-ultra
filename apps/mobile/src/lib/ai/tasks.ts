@@ -1,6 +1,9 @@
 import { AiError } from './errors';
 import { AI_PROMPT_VERSION } from './prompts';
+import { wrapProposal, type ProposalEnvelope } from './proposal';
 import { chatComplete } from './providers';
+import { estimateSetDuration, searchLibrary } from './search';
+import { isLiveSessionActive } from './stageGuard';
 import type { AiProviderId, ChatCompletionResult, ChatMessage } from './types';
 import {
   AI_SCHEMA_VERSION,
@@ -14,7 +17,7 @@ export const AI_MAX_INPUT_CHARS = 24_000;
 export const AI_MAX_OUTPUT_TOKENS = 2048;
 export const AI_MAX_LIBRARY_SONGS = 80;
 
-export type AiTaskType = 'chat' | 'build-set' | 'fix-chart' | 'clean-import';
+export type AiTaskType = 'chat' | 'build-set' | 'fix-chart' | 'clean-import' | 'ask-library';
 
 export type AiTaskInput = {
   taskType: AiTaskType;
@@ -23,6 +26,7 @@ export type AiTaskInput = {
   model?: string;
   messages: ChatMessage[];
   librarySongs?: LibrarySongRef[];
+  chartConsent?: { songId: string; title: string; chordpro: string };
   signal?: AbortSignal;
   deadlineMs?: number;
   maxInputChars?: number;
@@ -40,6 +44,8 @@ export type AiTaskResult = {
   truncated: boolean;
   text: string;
   proposal: ValidatedProposal | null;
+  envelope: ProposalEnvelope | null;
+  retrieved: LibrarySongRef[];
   promptVersion: string;
   schemaVersion: string;
 };
@@ -68,9 +74,26 @@ function enforceInputBudget(messages: ChatMessage[], maxChars: number): ChatMess
   return out;
 }
 
+function lastUserText(messages: ChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === 'user') return messages[i].content;
+  }
+  return '';
+}
+
+export function retrieveForTask(taskType: AiTaskType, library: LibrarySongRef[], userText: string): LibrarySongRef[] {
+  const pool = library.slice(0, 400);
+  if (taskType === 'chat') return pool.slice(0, AI_MAX_LIBRARY_SONGS);
+  const hits = searchLibrary(pool, userText, { limit: 40 });
+  if (hits.length) return hits;
+  return pool.slice(0, AI_MAX_LIBRARY_SONGS);
+}
+
 export async function runAiTask(input: AiTaskInput): Promise<AiTaskResult> {
   const requestId = input.requestId?.trim() || newRequestId();
   const allowModelFallback = input.allowModelFallback ?? input.taskType === 'chat';
+  const library = input.librarySongs ?? [];
+  const retrieved = retrieveForTask(input.taskType, library, lastUserText(input.messages));
   const messages = enforceInputBudget(input.messages, input.maxInputChars ?? AI_MAX_INPUT_CHARS);
 
   const completion: ChatCompletionResult = await chatComplete(input.provider, {
@@ -90,9 +113,30 @@ export async function runAiTask(input: AiTaskInput): Promise<AiTaskResult> {
   }
 
   let proposal: ValidatedProposal | null = null;
+  let envelope: ProposalEnvelope | null = null;
   if (input.taskType !== 'chat') {
     try {
-      proposal = parseTaskProposal(input.taskType, completion.text, input.librarySongs ?? []);
+      const parsed = parseTaskProposal(input.taskType, completion.text, retrieved.length ? retrieved : library);
+      proposal = parsed;
+      const duration =
+        parsed.kind === 'set' ? estimateSetDuration(parsed.songs) : { knownSeconds: 0, missingIds: [] as string[] };
+      const expectedRevisions: Record<string, number> = {};
+      if (parsed.kind === 'chart' && parsed.songId) {
+        const songId = parsed.songId;
+        const song = library.find((row) => row.id === songId);
+        if (song?.localRevision != null) expectedRevisions[songId] = song.localRevision;
+      }
+      envelope = wrapProposal(parsed, {
+        taskId: requestId,
+        schemaVersion: AI_SCHEMA_VERSION,
+        expectedRevisions,
+        estimatedSeconds: duration.knownSeconds || undefined,
+        missingDurationIds: duration.missingIds,
+        assumptions: [
+          isLiveSessionActive() ? 'Live is on stage; Apply is blocked until you leave Live.' : '',
+          duration.missingIds.length ? `${duration.missingIds.length} song(s) have no stored duration.` : '',
+        ].filter(Boolean),
+      });
     } catch (error) {
       if (error instanceof AiError) {
         throw new AiError(error.code, error.message, { rawText: completion.text, cause: error });
@@ -110,6 +154,8 @@ export async function runAiTask(input: AiTaskInput): Promise<AiTaskResult> {
     truncated: Boolean(completion.truncated),
     text: completion.text,
     proposal,
+    envelope,
+    retrieved,
     promptVersion: AI_PROMPT_VERSION,
     schemaVersion: AI_SCHEMA_VERSION,
   };

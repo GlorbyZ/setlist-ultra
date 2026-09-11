@@ -26,6 +26,7 @@ import { launchFlags } from '@/src/lib/launchFlags';
 import { openLocalMedia } from '@/src/lib/mediaStore';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
+import { setLiveSessionActive } from '@/src/lib/ai/stageGuard';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import { chartJumpTargets } from '@setlist-ultra/core';
 
@@ -94,7 +95,9 @@ export default function LiveTab() {
 
   useFocusEffect(
     useCallback(() => {
+      setLiveSessionActive(true);
       return () => {
+        setLiveSessionActive(false);
         try {
           audioPlayer.pause();
         } catch {

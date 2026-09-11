@@ -10,16 +10,18 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/Themed';
 import { AiSettingsPanel } from '@/src/components/AiSettingsPanel';
-import { applyChartPatch, applySetProposal } from '@/src/lib/ai/apply';
+import { applyApprovedProposal, undoLastAiApply } from '@/src/lib/ai/apply';
 import {
   AI_ACTION_CARDS,
   getAiApiKey,
   getAiProvider,
   hasAiApiKey,
+  isLiveSessionActive,
   providerMeta,
   runAiTask,
   starterMessages,
@@ -31,8 +33,9 @@ import {
   type AiTaskType,
   type ChatMessage,
   type LibraryContextStub,
-  type ValidatedProposal,
+  type ProposalEnvelope,
 } from '@/src/lib/ai';
+import { getSong } from '@/src/lib/repository';
 import { launchFlags } from '@/src/lib/launchFlags';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -47,11 +50,6 @@ type UiMessage = {
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function taskTypeForCard(card: AiActionCard): AiTaskType {
-  if (card.id === 'ask') return 'chat';
-  return card.id;
 }
 
 export default function AiScreen() {
@@ -69,6 +67,8 @@ function AiScreenInner() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ task?: string; songId?: string }>();
   const { songs, setlists, refresh } = useLibrary();
   const listRef = useRef<FlatList<UiMessage>>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -81,19 +81,31 @@ function AiScreenInner() {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [proposal, setProposal] = useState<ValidatedProposal | null>(null);
+  const [proposal, setProposal] = useState<ProposalEnvelope | null>(null);
   const [lastTask, setLastTask] = useState<AiTaskResult | null>(null);
   const [applying, setApplying] = useState(false);
   const [appliedNote, setAppliedNote] = useState<string | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [chartConsent, setChartConsent] = useState<LibraryContextStub['chartConsent']>();
 
   const libraryCtx: LibraryContextStub = useMemo(
     () => ({
       songCount: songs.length,
       setlistCount: setlists.length,
       sampleTitles: songs.slice(0, 40).map((s) => s.title || 'Untitled'),
-      songs: songs.slice(0, 80).map((s) => ({ id: s.id, title: s.title || 'Untitled', artist: s.artist || '' })),
+      songs: songs.slice(0, 400).map((s) => ({
+        id: s.id,
+        title: s.title || 'Untitled',
+        artist: s.artist || '',
+        durationSeconds: s.duration2 ?? s.durationSeconds,
+        tags: s.tags,
+        originalKey: s.originalKey,
+        localRevision: s.localRevision,
+      })),
+      chartConsent,
+      liveActive: isLiveSessionActive(),
     }),
-    [songs, setlists],
+    [songs, setlists, chartConsent],
   );
 
   const refreshConfig = useCallback(async () => {
@@ -138,11 +150,12 @@ function AiScreenInner() {
           apiKey,
           messages: history,
           librarySongs: libraryCtx.songs,
+          chartConsent: libraryCtx.chartConsent,
           signal: controller.signal,
           allowModelFallback: taskType === 'chat',
         });
         setLastTask(result);
-        setProposal(result.proposal);
+        setProposal(result.envelope);
         const fallbackNote = result.usedFallback ? `\n\n(Used fallback model ${result.model} — same provider.)` : '';
         setMessages((prev) => [
           ...prev,
@@ -161,7 +174,7 @@ function AiScreenInner() {
         setBusy(false);
       }
     },
-    [cancelInFlight, libraryCtx.songs],
+    [cancelInFlight, libraryCtx.songs, libraryCtx.chartConsent],
   );
 
   const onSend = async (text?: string, taskType: AiTaskType = 'chat') => {
@@ -180,22 +193,21 @@ function AiScreenInner() {
               .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
             { role: 'user', content },
           ]
-        : taskMessages(taskType as Exclude<AiActionCard['id'], 'ask'>, content, libraryCtx);
+        : taskMessages(taskType, content, libraryCtx);
     await runTask(taskType, history);
   };
 
   const onAction = async (card: AiActionCard) => {
-    if (card.id === 'ask') {
-      setDraft('');
-      return;
-    }
     if (!configured) {
       setShowSettings(true);
       return;
     }
-    const seeded = card.starter;
+    const seeded =
+      card.id === 'fix-chart' && chartConsent
+        ? `${card.starter}\n\nSong: ${chartConsent.title} (${chartConsent.songId})`
+        : card.starter;
     setMessages((prev) => [...prev, { id: newId(), role: 'user', content: seeded }]);
-    await runTask(taskTypeForCard(card), taskMessages(card.id, seeded, libraryCtx));
+    await runTask(card.id, taskMessages(card.id, seeded, libraryCtx));
   };
 
   const onApply = async () => {
@@ -203,17 +215,29 @@ function AiScreenInner() {
     setApplying(true);
     setError(null);
     try {
-      if (proposal.kind === 'set') {
-        const applied = await applySetProposal(proposal);
-        setAppliedNote(`Created set “${applied.title}” with ${applied.songCount} songs.`);
-      } else {
-        const applied = await applyChartPatch(proposal);
-        setAppliedNote(applied.created ? 'Saved as a new chart.' : 'Updated the existing chart.');
-      }
+      const receipt = await applyApprovedProposal(proposal, { contentHash: proposal.contentHash });
+      setAppliedNote(receipt.summary);
+      setCanUndo(Boolean(receipt.undo));
       setProposal(null);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Apply failed');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const onUndo = async () => {
+    if (applying) return;
+    setApplying(true);
+    setError(null);
+    try {
+      const note = await undoLastAiApply();
+      setAppliedNote(note);
+      setCanUndo(false);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Undo failed');
     } finally {
       setApplying(false);
     }
@@ -227,6 +251,33 @@ function AiScreenInner() {
   }, [messages, busy, proposal]);
 
   useEffect(() => () => cancelInFlight(), [cancelInFlight]);
+
+  useEffect(() => {
+    const songId = typeof params.songId === 'string' ? params.songId : undefined;
+    if (!songId) {
+      setChartConsent(undefined);
+      return;
+    }
+    void getSong(songId).then((row) => {
+      if (!row) return;
+      setChartConsent({ songId: row.id, title: row.title, chordpro: row.chordpro ?? '' });
+    });
+  }, [params.songId]);
+
+  const consumedDeepLink = useRef<string | null>(null);
+
+  useEffect(() => {
+    const task = params.task;
+    const key = `${task ?? ''}:${params.songId ?? ''}`;
+    if (!configured || !task || busy || consumedDeepLink.current === key) return;
+    if (task === 'fix-chart' && params.songId && !chartConsent) return;
+    if (task === 'build-set' || task === 'fix-chart' || task === 'clean-import' || task === 'ask-library') {
+      const card = AI_ACTION_CARDS.find((item) => item.id === task);
+      if (!card) return;
+      consumedDeepLink.current = key;
+      void onAction(card);
+    }
+  }, [configured, params.task, params.songId, busy, chartConsent]);
 
   if (!ready) {
     return (
@@ -273,8 +324,9 @@ function AiScreenInner() {
           />
           {!configured ? (
             <Text style={styles.emptyHint}>
-              Day-one AI home uses your own Gemini (default), OpenAI, or Anthropic key. Keys never leave
-              this device except to call the provider you pick. AI never writes your library until you tap Apply.
+              Preparation assistant uses your own Gemini, OpenAI, or Anthropic key (BYOK). Hosted AI Plus is not
+              in this build. Keys stay on this device. Writes wait for Apply and can Undo if you have not edited
+              since. Core songbook works without AI.
             </Text>
           ) : null}
         </ScrollView>
@@ -300,11 +352,11 @@ function AiScreenInner() {
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyBox}>
-                <Text style={styles.emptyTitle}>Action cards + chat</Text>
+                <Text style={styles.emptyTitle}>Build, clean, then Apply</Text>
                 <Text style={styles.emptyBody}>
-                  Library catalog: {libraryCtx.songCount} songs · {libraryCtx.setlistCount} sets (ids only, no
-                  chart bodies). Typed tasks validate JSON and wait for Apply. Chat may fall back within the
-                  same provider; it never switches providers.
+                  Scope: this library ({libraryCtx.songCount} songs, {libraryCtx.setlistCount} sets). Search stays
+                  on device; only retrieved ids (and a chart you opened Clean up on) go to your provider. Apply is
+                  blocked while Live is focused. Chat never switches providers.
                 </Text>
               </View>
             }
@@ -329,7 +381,7 @@ function AiScreenInner() {
               busy ? (
                 <View style={styles.typing}>
                   <ActivityIndicator color={theme.accent} />
-                  <Text style={styles.typingText}>Thinking…</Text>
+                  <Text style={styles.typingText}>{chartConsent ? 'Drafting with consented chart…' : 'Searching library, then drafting…'}</Text>
                   <Pressable onPress={cancelInFlight} style={styles.cancelChip}>
                     <Text style={styles.cancelText}>Cancel</Text>
                   </Pressable>
@@ -342,31 +394,58 @@ function AiScreenInner() {
             <View style={styles.preview}>
               <Text style={styles.previewTitle}>
                 Preview — not saved
-                {proposal.uncertain ? ' · uncertain' : ''}
+                {proposal.body.uncertain ? ' · uncertain' : ''}
+                {libraryCtx.liveActive ? ' · Live is on stage' : ''}
               </Text>
-              {proposal.kind === 'set' ? (
+              {proposal.diffLines.slice(0, 12).map((line) => (
+                <Text key={line} style={styles.previewBody}>
+                  {line}
+                </Text>
+              ))}
+              {proposal.warnings.map((line) => (
+                <Text key={line} style={styles.previewBody}>
+                  {line}
+                </Text>
+              ))}
+              {proposal.assumptions.map((line) => (
+                <Text key={line} style={styles.previewBody}>
+                  Assumption: {line}
+                </Text>
+              ))}
+              {proposal.body.kind === 'set' && proposal.estimatedSeconds ? (
                 <Text style={styles.previewBody}>
-                  Set “{proposal.title}” · {proposal.songs.length} library songs
-                  {proposal.inventedIds.length ? ` · ignored ${proposal.inventedIds.length} unknown ids` : ''}
+                  Known duration {Math.round(proposal.estimatedSeconds / 60)} min
+                  {proposal.missingDurationIds.length ? ` · ${proposal.missingDurationIds.length} song(s) missing duration` : ''}
                 </Text>
-              ) : (
-                <Text style={styles.previewBody} numberOfLines={4}>
-                  {proposal.songId ? `Update ${proposal.title ?? 'chart'}` : 'Create a new chart'} ·{' '}
-                  {proposal.chordpro.slice(0, 180)}
-                </Text>
-              )}
+              ) : null}
               <View style={styles.previewRow}>
                 <Pressable style={styles.ghost} onPress={() => setProposal(null)} disabled={applying}>
                   <Text style={styles.ghostText}>Discard</Text>
                 </Pressable>
-                <Pressable style={styles.apply} onPress={() => void onApply()} disabled={applying}>
-                  <Text style={styles.applyText}>{applying ? 'Applying…' : 'Apply'}</Text>
-                </Pressable>
+                {proposal.body.kind === 'library' ? (
+                  <Pressable
+                    style={styles.apply}
+                    onPress={() => {
+                      const first = proposal.body.kind === 'library' ? proposal.body.songIds[0] : undefined;
+                      if (first) router.push(`/song/${first}`);
+                    }}>
+                    <Text style={styles.applyText}>Open</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable style={styles.apply} onPress={() => void onApply()} disabled={applying}>
+                    <Text style={styles.applyText}>{applying ? 'Applying…' : 'Apply'}</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           ) : null}
 
           {appliedNote ? <Text style={styles.applied}>{appliedNote}</Text> : null}
+          {canUndo ? (
+            <Pressable style={styles.ghost} onPress={() => void onUndo()} disabled={applying}>
+              <Text style={styles.ghostText}>{applying ? 'Working…' : 'Undo last Apply'}</Text>
+            </Pressable>
+          ) : null}
           {lastTask && !proposal ? (
             <Text style={styles.requestId}>
               {lastTask.provider} · {lastTask.model} · {lastTask.requestId}

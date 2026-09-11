@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 
@@ -7,6 +7,7 @@ import { BrandButton } from '@/src/components/BrandButton';
 import { BrandDialog } from '@/src/components/BrandDialog';
 import { LibrarySwitcher } from '@/src/components/LibrarySwitcher';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { formatDate } from '@/src/lib/format';
 import { createSetlist, deleteSetlist, setlistDurations } from '@/src/lib/repository';
 import { pressedStyle } from '@/src/motion';
@@ -85,6 +86,13 @@ export default function SetsScreen() {
           />
         </View>
       </View>
+      {launchFlags.ai && !managing ? (
+        <Pressable
+          style={styles.aiRow}
+          onPress={() => router.push('/ai?task=build-set' as Href)}>
+          <Text style={styles.aiRowText}>Build with AI</Text>
+        </Pressable>
+      ) : null}
 
       {managing ? (
         <BrandButton
@@ -198,5 +206,14 @@ function makeStyles(t: AppTheme) {
     empty: { padding: 32, alignItems: 'center' as const },
     emptyTitle: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },
     emptyBody: { color: t.muted, marginTop: 8, textAlign: 'center' as const, fontSize: t.type.body.fontSize, lineHeight: t.type.body.lineHeight, fontWeight: t.type.body.fontWeight },
+    aiRow: {
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.panel,
+      borderRadius: t.radius.md,
+      paddingVertical: 10,
+      alignItems: 'center' as const,
+    },
+    aiRowText: { color: t.accent, fontWeight: '700' as const, fontSize: 15 },
   };
 }

@@ -1,5 +1,5 @@
 import { usePreventRemove } from '@react-navigation/native';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -142,6 +142,13 @@ export default function EditorScreen() {
         <Pressable style={styles.ghost} onPress={() => song && void printSong(song)}>
           <Text style={styles.ghostText}>Print</Text>
         </Pressable>
+        {launchFlags.ai ? (
+          <Pressable
+            style={styles.ghost}
+            onPress={() => router.push(`/ai?task=fix-chart&songId=${encodeURIComponent(id)}` as Href)}>
+            <Text style={styles.ghostText}>Clean up</Text>
+          </Pressable>
+        ) : null}
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.label}>Title</Text>

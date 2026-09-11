@@ -2,12 +2,16 @@ import { parseChordPro } from '@setlist-ultra/core';
 
 import { AiError } from './errors';
 
-export const AI_SCHEMA_VERSION = 'ai-proposals.v1';
+export const AI_SCHEMA_VERSION = 'ai-proposals.v2';
 
 export type LibrarySongRef = {
   id: string;
   title: string;
   artist: string;
+  durationSeconds?: number | null;
+  tags?: string | null;
+  originalKey?: string | null;
+  localRevision?: number;
 };
 
 export type SetProposal = {
@@ -46,7 +50,16 @@ export type ValidatedChartPatch = {
   notes?: string;
 };
 
-export type ValidatedProposal = ValidatedSetProposal | ValidatedChartPatch;
+export type ValidatedLibraryAnswer = {
+  kind: 'library';
+  songIds: string[];
+  songs: LibrarySongRef[];
+  inventedIds: string[];
+  uncertain: boolean;
+  notes?: string;
+};
+
+export type ValidatedProposal = ValidatedSetProposal | ValidatedChartPatch | ValidatedLibraryAnswer;
 
 export function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
@@ -104,6 +117,26 @@ export function validateSetProposal(raw: unknown, library: LibrarySongRef[]): Va
   };
 }
 
+export function validateLibraryAnswer(raw: unknown, library: LibrarySongRef[]): ValidatedLibraryAnswer {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  if (!obj || (obj.type !== 'library-answer' && obj.kind !== 'library')) {
+    throw new AiError('invalid_structure', 'Expected a library-answer object.');
+  }
+  const idsRaw = Array.isArray(obj.songIds) ? obj.songIds : [];
+  const songIds = idsRaw.filter((id): id is string => typeof id === 'string' && id.trim().length > 0).map((id) => id.trim());
+  const byId = new Map(library.map((song) => [song.id, song]));
+  const inventedIds = songIds.filter((id) => !byId.has(id));
+  const knownIds = songIds.filter((id) => byId.has(id));
+  return {
+    kind: 'library',
+    songIds: knownIds,
+    songs: knownIds.map((id) => byId.get(id)!),
+    inventedIds,
+    uncertain: Boolean(obj.uncertain) || inventedIds.length > 0 || !knownIds.length,
+    notes: asString(obj.notes),
+  };
+}
+
 export function validateChartPatch(raw: unknown, library: LibrarySongRef[]): ValidatedChartPatch {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   if (!obj || (obj.type !== 'chart-patch' && obj.kind !== 'chart')) {
@@ -140,11 +173,12 @@ export function validateChartPatch(raw: unknown, library: LibrarySongRef[]): Val
 }
 
 export function parseTaskProposal(
-  taskType: 'build-set' | 'fix-chart' | 'clean-import',
+  taskType: 'build-set' | 'fix-chart' | 'clean-import' | 'ask-library',
   text: string,
   library: LibrarySongRef[],
 ): ValidatedProposal {
   const raw = extractJsonObject(text);
   if (taskType === 'build-set') return validateSetProposal(raw, library);
+  if (taskType === 'ask-library') return validateLibraryAnswer(raw, library);
   return validateChartPatch(raw, library);
 }
