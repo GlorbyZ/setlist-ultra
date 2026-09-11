@@ -1,32 +1,47 @@
 import Constants from 'expo-constants';
 
+import { isPublicServiceUrl, isUsableHttpUrl, sanitizeConfigValue } from './configValidate';
+
 function extra(name: string): string {
-  const value = Constants.expoConfig?.extra?.[name];
-  if (typeof value !== 'string' || !value || value.includes('${')) return '';
-  return value;
+  return sanitizeConfigValue(Constants.expoConfig?.extra?.[name]);
 }
 
-const DEFAULT_UG_PROXY = 'https://ug.bigzay.com';
+function fromEnv(name: string): string {
+  return sanitizeConfigValue(process.env[name]);
+}
 
 function resolveUgProxyUrl() {
-  const fromEnv = process.env.EXPO_PUBLIC_UG_PROXY_URL || extra('ugProxyUrl');
-  const isLocal = !fromEnv || /localhost|127\.0\.0\.1/i.test(fromEnv);
-  if (isLocal && !__DEV__) return DEFAULT_UG_PROXY;
-  return fromEnv || DEFAULT_UG_PROXY;
+  const fromEnvOrExtra = fromEnv('EXPO_PUBLIC_UG_PROXY_URL') || extra('ugProxyUrl');
+  if (!isUsableHttpUrl(fromEnvOrExtra)) return '';
+  if (typeof __DEV__ !== 'undefined' && !__DEV__ && !isPublicServiceUrl(fromEnvOrExtra)) return '';
+  return fromEnvOrExtra.replace(/\/$/, '');
+}
+
+function resolveManagerUrl() {
+  const value = fromEnv('EXPO_PUBLIC_MANAGER_URL') || extra('managerUrl');
+  if (!isUsableHttpUrl(value)) return '';
+  if (typeof __DEV__ !== 'undefined' && !__DEV__ && !isPublicServiceUrl(value)) return '';
+  return value.replace(/\/$/, '');
 }
 
 export const config = {
-  googleWebClientId:
-    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? extra('googleWebClientId') ?? '',
-  googleAndroidClientId:
-    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? extra('googleAndroidClientId') ?? '',
+  googleWebClientId: fromEnv('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID') || extra('googleWebClientId'),
+  googleAndroidClientId: fromEnv('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID') || extra('googleAndroidClientId'),
   ugProxyUrl: resolveUgProxyUrl(),
-  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? extra('supabaseUrl') ?? '',
-  supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? extra('supabaseAnonKey') ?? '',
-  managerUrl: process.env.EXPO_PUBLIC_MANAGER_URL ?? extra('managerUrl') ?? 'http://localhost:3848',
-  webAppUrl: process.env.EXPO_PUBLIC_WEB_APP_URL ?? extra('webAppUrl') ?? '',
+  supabaseUrl: fromEnv('EXPO_PUBLIC_SUPABASE_URL') || extra('supabaseUrl'),
+  supabaseAnonKey: fromEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY') || extra('supabaseAnonKey'),
+  managerUrl: resolveManagerUrl(),
+  webAppUrl: fromEnv('EXPO_PUBLIC_WEB_APP_URL') || extra('webAppUrl'),
 };
 
 export function isHostedConfigured(): boolean {
-  return Boolean(config.supabaseUrl.trim() && config.supabaseAnonKey.trim());
+  return isPublicServiceUrl(config.supabaseUrl) && Boolean(config.supabaseAnonKey.trim());
+}
+
+export function isCatalogConfigured(): boolean {
+  return isPublicServiceUrl(config.ugProxyUrl);
+}
+
+export function isManagerConfigured(): boolean {
+  return isUsableHttpUrl(config.managerUrl);
 }

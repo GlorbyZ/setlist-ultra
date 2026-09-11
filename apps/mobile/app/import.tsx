@@ -31,6 +31,7 @@ import {
 import { ImportOverlay } from '@/src/components/ImportOverlay';
 import { importUgTab, type UgSongGroup } from '@/src/lib/ug-api';
 import { config } from '@/src/lib/config';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { pickBinaryFile, pickImage } from '@/src/lib/files';
 import { lookupRemoteChart } from '@/src/lib/hosted';
 import { openSongInLive } from '@/src/lib/openSongInLive';
@@ -41,7 +42,7 @@ export default function ImportScreen() {
   const { refresh } = useLibrary();
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const [tab, setTab] = useState<'online' | 'paste' | 'file'>('online');
+  const [tab, setTab] = useState<'online' | 'paste' | 'file'>(launchFlags.catalog ? 'online' : 'file');
   const [query, setQuery] = useState('');
   const [importGroup, setImportGroup] = useState<UgSongGroup | null>(null);
   const [directUrl, setDirectUrl] = useState('');
@@ -64,7 +65,7 @@ export default function ImportScreen() {
   }, []);
 
   // Same online engine as Songs tab search (debounce, group/rank, load-more, hide Official).
-  const online = useUgOnlineSearch(query, { enabled: tab === 'online', clearWhenDisabled: false });
+  const online = useUgOnlineSearch(query, { enabled: launchFlags.catalog && tab === 'online', clearWhenDisabled: false });
 
   const afterImport = async (songId?: string) => {
     await refresh();
@@ -209,7 +210,9 @@ export default function ImportScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.tabs}>
-        {(['online', 'file', 'paste'] as const).map((id) => (
+        {(
+          (launchFlags.catalog ? (['online', 'file', 'paste'] as const) : (['file', 'paste'] as const))
+        ).map((id) => (
           <Pressable key={id} style={[styles.tab, tab === id && styles.tabOn]} onPress={() => setTab(id)}>
             <Text style={styles.tabText}>{id === 'file' ? 'File / SBP' : id === 'online' ? 'Search online' : 'Paste'}</Text>
           </Pressable>
@@ -243,9 +246,11 @@ export default function ImportScreen() {
           <Pressable style={styles.ghost} onPress={() => void createNew()}>
             <Text style={styles.ghostText}>Create empty song</Text>
           </Pressable>
-          <Pressable style={styles.ghost} onPress={() => void scanPaper()}>
-            <Text style={styles.ghostText}>Camera / image scan</Text>
-          </Pressable>
+          {launchFlags.scan ? (
+            <Pressable style={styles.ghost} onPress={() => void scanPaper()}>
+              <Text style={styles.ghostText}>Camera / image scan</Text>
+            </Pressable>
+          ) : null}
           <TextInput
             value={title}
             onChangeText={setTitle}

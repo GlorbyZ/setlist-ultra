@@ -16,7 +16,8 @@ import { KEY_OPTIONS, hashImportBytes } from '@setlist-ultra/core';
 import { copySongToLibrary, getLibraryScope, getSong, updateSong } from '@/src/lib/repository';
 import { pickBinaryFile } from '@/src/lib/files';
 import { persistMediaFile } from '@/src/lib/mediaStore';
-import { parseMidiOnLoad, serializeMidiOnLoad } from '@/src/lib/midi';
+import { launchFlags } from '@/src/lib/launchFlags';
+import { midiOutputsAvailable, parseMidiOnLoad, serializeMidiOnLoad } from '@/src/lib/midi';
 import { openSongInLive } from '@/src/lib/openSongInLive';
 import { printSong } from '@/src/lib/print';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -173,39 +174,53 @@ export default function EditorScreen() {
           placeholder="Stage notes"
           placeholderTextColor={theme.faint}
         />
-        <Text style={styles.label}>Backing track</Text>
-        <Text style={styles.hintInline}>{audioLabel} · local file only, not a DAW</Text>
-        <Pressable
-          style={styles.ghost}
-          onPress={() =>
-            void (async () => {
-              const picked = await pickBinaryFile('.mp3,.m4a,.wav,.aac,.ogg');
-              if (!picked || !id) return;
-              const ext = (picked.name.split('.').pop() || 'mp3').toLowerCase();
-              const uri = await persistMediaFile('audio', picked.bytes, ext, hashImportBytes(picked.bytes));
-              await updateSong(id, { linkedAudio: uri });
-              setAudioLabel(picked.name);
-              setDirty(false);
-              await refresh();
-            })()
-          }>
-          <Text style={styles.ghostText}>Attach audio</Text>
-        </Pressable>
-        <Text style={styles.label}>MIDI on load (Web MIDI when available)</Text>
-        <View style={styles.metaRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Channel</Text>
-            <TextInput style={styles.input} keyboardType="number-pad" value={midiChannel} onChangeText={(v) => { setMidiChannel(v); setDirty(true); }} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Program</Text>
-            <TextInput style={styles.input} keyboardType="number-pad" value={midiProgram} onChangeText={(v) => { setMidiProgram(v); setDirty(true); }} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Note</Text>
-            <TextInput style={styles.input} keyboardType="number-pad" value={midiNote} onChangeText={(v) => { setMidiNote(v); setDirty(true); }} />
-          </View>
-        </View>
+        {launchFlags.audio ? (
+          <>
+            <Text style={styles.label}>Backing track</Text>
+            <Text style={styles.hintInline}>{audioLabel} · local file only, stays on this device</Text>
+            <Pressable
+              style={styles.ghost}
+              onPress={() =>
+                void (async () => {
+                  try {
+                    const picked = await pickBinaryFile('.mp3,.m4a,.wav,.aac,.ogg');
+                    if (!picked || !id) return;
+                    const ext = (picked.name.split('.').pop() || 'mp3').toLowerCase();
+                    const uri = await persistMediaFile('audio', picked.bytes, ext, hashImportBytes(picked.bytes));
+                    await updateSong(id, { linkedAudio: uri });
+                    setAudioLabel(picked.name);
+                    await refresh();
+                  } catch (error) {
+                    Alert.alert(
+                      'Could not attach audio',
+                      error instanceof Error ? error.message : 'The file was not saved. Your other edits are unchanged.',
+                    );
+                  }
+                })()
+              }>
+              <Text style={styles.ghostText}>Attach audio</Text>
+            </Pressable>
+          </>
+        ) : null}
+        {midiOutputsAvailable() ? (
+          <>
+            <Text style={styles.label}>MIDI on load (Web MIDI on this device)</Text>
+            <View style={styles.metaRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Channel</Text>
+                <TextInput style={styles.input} keyboardType="number-pad" value={midiChannel} onChangeText={(v) => { setMidiChannel(v); setDirty(true); }} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Program</Text>
+                <TextInput style={styles.input} keyboardType="number-pad" value={midiProgram} onChangeText={(v) => { setMidiProgram(v); setDirty(true); }} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Note</Text>
+                <TextInput style={styles.input} keyboardType="number-pad" value={midiNote} onChangeText={(v) => { setMidiNote(v); setDirty(true); }} />
+              </View>
+            </View>
+          </>
+        ) : null}
         <Text style={styles.label}>ChordPro</Text>
         <TextInput
           style={[styles.input, styles.editor]}

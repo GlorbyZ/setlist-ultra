@@ -25,8 +25,10 @@ export function serializeMidiOnLoad(midi: MidiOnLoad): string {
   return JSON.stringify(midi);
 }
 
+/** Web MIDI only. Android/iOS have a navigator object but not requestMIDIAccess. */
 export function midiOutputsAvailable(): boolean {
-  return typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator;
+  if (typeof navigator === 'undefined') return false;
+  return typeof (navigator as { requestMIDIAccess?: unknown }).requestMIDIAccess === 'function';
 }
 
 export async function sendMidiOnLoad(payload: string | null | undefined) {

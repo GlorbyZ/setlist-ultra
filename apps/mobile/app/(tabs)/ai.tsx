@@ -33,6 +33,7 @@ import {
   type LibraryContextStub,
   type ValidatedProposal,
 } from '@/src/lib/ai';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
@@ -54,6 +55,17 @@ function taskTypeForCard(card: AiActionCard): AiTaskType {
 }
 
 export default function AiScreen() {
+  if (!launchFlags.ai) {
+    return (
+      <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
+        <Text>AI tools are off in this build.</Text>
+      </View>
+    );
+  }
+  return <AiScreenInner />;
+}
+
+function AiScreenInner() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();

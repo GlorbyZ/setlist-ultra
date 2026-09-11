@@ -13,6 +13,7 @@ import {
   SongsHeaderTitle,
 } from '@/src/providers/SongsChromeProvider';
 import { PRESS_SPRING, useReduceMotion } from '@/src/motion';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { useTheme } from '@/src/theme';
 
 function TabIcon({
@@ -167,6 +168,7 @@ export default function TabLayout() {
           options={{
             title: 'AI',
             tabBarLabel: 'AI',
+            href: launchFlags.ai ? undefined : null,
             tabBarIcon: ({ color, size, focused }) => (
               <RaisedAiTabIcon color={color} size={size} focused={focused} />
             ),

@@ -21,9 +21,12 @@ export async function searchUgTabs(
   query: string,
   opts?: { page?: number; pageSize?: number },
 ): Promise<UgSearchPage> {
+  const base = config.ugProxyUrl.replace(/\/$/, '');
+  if (!base) {
+    throw new Error('Online catalog search is not configured.');
+  }
   const page = Math.max(1, opts?.page ?? 1);
   const pageSize = Math.min(40, Math.max(5, opts?.pageSize ?? UG_PAGE_SIZE));
-  const base = config.ugProxyUrl.replace(/\/$/, '');
   const params = new URLSearchParams({
     q: query,
     page: String(page),
@@ -57,6 +60,9 @@ export async function searchUgTabs(
 
 export async function importUgTab(url: string): Promise<UgTabResponse> {
   const base = config.ugProxyUrl.replace(/\/$/, '');
+  if (!base) {
+    throw new Error('Online catalog search is not configured.');
+  }
   const response = await fetch(`${base}/tab?url=${encodeURIComponent(url)}`);
   const body = await response.text();
   let data: UgTabResponse & { error?: string };

@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Text } from '@/components/Themed';
 import { isHostedConfigured } from '@/src/lib/config';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
@@ -39,11 +40,13 @@ export function LibrarySwitcher({ onChanged }: { onChanged?: () => void }) {
           gradient={theme.gradient}
         />
       ))}
-      <Link href={'/groups' as Href} asChild>
-        <Pressable style={styles.chip} onPress={() => onChanged?.()}>
-          <Text style={styles.chipText}>{hosted ? (orgName ? 'Groups' : '+ Group') : 'Groups'}</Text>
-        </Pressable>
-      </Link>
+      {launchFlags.cloud || orgs.length ? (
+        <Link href={'/groups' as Href} asChild>
+          <Pressable style={styles.chip} onPress={() => onChanged?.()}>
+            <Text style={styles.chipText}>{hosted ? (orgName ? 'Groups' : '+ Group') : 'Groups'}</Text>
+          </Pressable>
+        </Link>
+      ) : null}
     </View>
   );
 }

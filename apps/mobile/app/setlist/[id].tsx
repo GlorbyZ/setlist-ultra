@@ -74,12 +74,13 @@ export default function SetlistScreen() {
   }, [load]);
 
   const playItem = async (item: SetlistItemRow, index: number) => {
-    if (item.itemType !== 'song' || !item.songId || !setlist) return;
+    if (!setlist) return;
+    if (item.itemType === 'song' && !item.songId) return;
     setActiveIndex(index);
     await patchAppState({
       currentSetlistId: setlist.id,
       currentSetIndex: index,
-      currentSongId: item.songId,
+      currentSongId: item.songId ?? null,
     });
     router.navigate('/live' as Href);
   };

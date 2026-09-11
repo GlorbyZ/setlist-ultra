@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_UG_PROXY_URL: https://ug.bigzay.com
+      EXPO_PUBLIC_LAUNCH_AI: "1"
+      EXPO_PUBLIC_LAUNCH_SCAN: "1"
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}

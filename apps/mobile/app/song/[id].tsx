@@ -28,7 +28,7 @@ export default function SongScreen() {
   const styles = useThemedStyles(makeStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { queue, index, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue(id);
+  const { queue, index, entry, song, loading, go, goTo, setContext, hasSetContext } = useLiveQueue(id);
   const { fontSize, setFontSize, hideChords, setHideChords } = useLiveChartSession();
   const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
@@ -36,8 +36,10 @@ export default function SongScreen() {
   const [setlistOpen, setSetlistOpen] = useState(false);
   const viewerRef = useRef<SongViewerHandle>(null);
 
-  const prevSong = index > 0 ? queue[index - 1] : null;
-  const nextSong = index < queue.length - 1 ? queue[index + 1] : null;
+  const prev = index > 0 ? queue[index - 1] : null;
+  const next = index < queue.length - 1 ? queue[index + 1] : null;
+  const prevSong = prev?.kind === 'song' ? prev.song ?? null : null;
+  const nextSong = next?.kind === 'song' ? next.song ?? null : null;
 
   useEffect(() => {
     warmSongDocuments([prevSong, song, nextSong]);
@@ -112,7 +114,7 @@ export default function SongScreen() {
   const pages: SwipePagerPage[] = [];
   if (prevChart && prevSong) {
     pages.push({
-      key: prevSong.id,
+      key: prev?.key ?? prevSong.id,
       queueIndex: index - 1,
       content: (
         <LiveSongPage
@@ -132,7 +134,7 @@ export default function SongScreen() {
     });
   }
   pages.push({
-    key: song.id,
+    key: entry?.key ?? song.id,
     queueIndex: index,
     content: (
       <LiveSongPage
@@ -156,7 +158,7 @@ export default function SongScreen() {
   });
   if (nextChart && nextSong) {
     pages.push({
-      key: nextSong.id,
+      key: next?.key ?? nextSong.id,
       queueIndex: index + 1,
       content: (
         <LiveSongPage
@@ -179,15 +181,15 @@ export default function SongScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LiveChrome
-        chromeKey={song.id}
+        chromeKey={entry?.key ?? song.id}
         tempo={song.tempo}
         capo={capo}
         soundingKey={sounding}
         onCapo={(d) => changeCapo(wrapCapo(capo, d))}
         onCapoPick={(n) => changeCapo(n)}
         onEdit={() => router.push(('/editor/' + song.id) as Href)}
-        onPrev={prevSong ? () => go(-1) : undefined}
-        onNext={nextSong ? () => go(1) : undefined}
+        onPrev={prev ? () => go(-1) : undefined}
+        onNext={next ? () => go(1) : undefined}
         onTranspose={(d) => changeKeyShift(keyShift + d)}
         onKeyPick={(keyName) => changeKeyShift(keyShiftToPick(song.originalKey, keyName, keyShift))}
         onToggleLyrics={() => setHideChords((v) => !v)}
@@ -205,8 +207,8 @@ export default function SongScreen() {
         }}>
         <SwipePager
           index={index}
-          onPrev={prevSong ? () => go(-1) : undefined}
-          onNext={nextSong ? () => go(1) : undefined}
+          onPrev={prev ? () => go(-1) : undefined}
+          onNext={next ? () => go(1) : undefined}
           pages={pages}
         />
       </LiveChrome>
@@ -217,9 +219,9 @@ export default function SongScreen() {
           onClose={() => setSetlistOpen(false)}
           setTitle={setContext.title}
           eventDate={setContext.eventDate}
-          songs={queue}
-          currentSongId={song.id}
-          onSelectSong={(_id, songIndex) => goTo(songIndex)}
+          entries={queue}
+          currentKey={entry?.key ?? song.id}
+          onSelect={(_key, songIndex) => goTo(songIndex)}
         />
       ) : null}
     </View>

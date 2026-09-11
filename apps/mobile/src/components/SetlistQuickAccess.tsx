@@ -1,24 +1,31 @@
 ﻿import { useEffect } from 'react';
 import { BackHandler, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { SongRow } from '@setlist-ultra/db';
-
 import { Text } from '@/components/Themed';
 import { formatDate } from '@/src/lib/format';
 import { PressableScale } from '@/src/motion';
 import { useThemedStyles, type AppTheme } from '@/src/theme';
 import { soundingKeyName } from '@setlist-ultra/core';
 
-export type SetlistQuickSong = Pick<SongRow, 'id' | 'title' | 'artist' | 'originalKey' | 'keyShift'>;
+export type SetlistQuickEntry = {
+  key: string;
+  kind: 'song' | 'note' | 'timer';
+  title: string;
+  artist?: string | null;
+  song?: {
+    originalKey?: string | null;
+    keyShift?: number | null;
+  } | null;
+};
 
 type Props = {
   open: boolean;
   onClose: () => void;
   setTitle: string;
   eventDate?: string | null;
-  songs: SetlistQuickSong[];
-  currentSongId: string | null;
-  onSelectSong: (songId: string, index: number) => void;
+  entries: SetlistQuickEntry[];
+  currentKey: string | null;
+  onSelect: (key: string, index: number) => void;
 };
 
 /** Songbook Pro–style Live setlist overlay: numbered songs, chart stays behind. */
@@ -27,9 +34,9 @@ export function SetlistQuickAccess({
   onClose,
   setTitle,
   eventDate,
-  songs,
-  currentSongId,
-  onSelectSong,
+  entries,
+  currentKey,
+  onSelect,
 }: Props) {
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
@@ -70,26 +77,36 @@ export function SetlistQuickAccess({
           style={styles.list}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled">
-          {songs.map((song, index) => {
-            const on = song.id === currentSongId;
-            const key =
-              soundingKeyName(song.originalKey, song.keyShift ?? 0) ?? song.originalKey ?? '';
+          {entries.map((item, index) => {
+            const on = item.key === currentKey;
+            const sounding =
+              item.kind === 'song'
+                ? soundingKeyName(item.song?.originalKey, item.song?.keyShift ?? 0) ??
+                  item.song?.originalKey ??
+                  ''
+                : '';
+            const meta =
+              item.kind === 'note'
+                ? 'Note'
+                : item.kind === 'timer'
+                  ? 'Break'
+                  : [item.artist, sounding].filter(Boolean).join(' · ');
             return (
               <PressableScale
-                key={`${song.id}-${index}`}
+                key={item.key}
                 style={[styles.row, on && styles.rowOn]}
                 onPress={() => {
-                  onSelectSong(song.id, index);
+                  onSelect(item.key, index);
                   onClose();
                 }}
-                accessibilityLabel={`Song ${index + 1}, ${song.title}`}>
+                accessibilityLabel={`Item ${index + 1}, ${item.title}`}>
                 <Text style={[styles.num, on && styles.numOn]}>{index + 1}</Text>
                 <View style={styles.rowBody}>
                   <Text style={[styles.songTitle, on && styles.songTitleOn]} numberOfLines={1}>
-                    {song.title}
+                    {item.title}
                   </Text>
                   <Text style={styles.songMeta} numberOfLines={1}>
-                    {[song.artist, key].filter(Boolean).join(' · ')}
+                    {meta}
                   </Text>
                 </View>
               </PressableScale>

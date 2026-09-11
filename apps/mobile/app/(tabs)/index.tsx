@@ -25,6 +25,7 @@ import { PressableScale, pressedStyle, useReduceMotion } from '@/src/motion';
 import { useSongsChrome } from '@/src/providers/SongsChromeProvider';
 import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
 import { addSongToSetlist, deleteSong, deleteSongs, parseSongDocument, updateSong } from '@/src/lib/repository';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { openSongInLive } from '@/src/lib/openSongInLive';
 import { type UgSongGroup } from '@/src/lib/ug-api';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -141,7 +142,7 @@ export default function SongsScreen() {
 
   // Shared UG online engine (same as Add songs). Local-first: auto-search only when
   // local matches are thin, or the user taps "Search online".
-  const onlineEnabled = Boolean(q) && (localHits.length < MIN_LOCAL || wantOnline);
+  const onlineEnabled = launchFlags.catalog && Boolean(q) && (localHits.length < MIN_LOCAL || wantOnline);
   const online = useUgOnlineSearch(query, { enabled: onlineEnabled, clearWhenDisabled: true });
 
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function SongsScreen() {
     if (localHits.length >= MIN_LOCAL) {
       out.push({ kind: 'heading', id: 'local-h', title: 'In your library' });
       for (const song of localHits) out.push({ kind: 'local', song });
-      out.push({ kind: 'action', id: 'search-online', label: 'Search online' });
+      if (launchFlags.catalog) out.push({ kind: 'action', id: 'search-online', label: 'Search online' });
       if (online.status === 'searching') out.push({ kind: 'status', id: 'searching', text: 'Searching online…' });
       if (online.status === 'error') out.push({ kind: 'status', id: 'err', text: online.error || 'Search failed' });
       if (online.status === 'empty' && wantOnline) out.push({ kind: 'status', id: 'none', text: 'Nothing found.' });
@@ -191,7 +192,9 @@ export default function SongsScreen() {
     Keyboard.dismiss();
     const term = query.trim();
     if (!term) return;
-    if (localHits.length < MIN_LOCAL || wantOnline) online.runSearch(term);
+    if (localHits.length < MIN_LOCAL || wantOnline) {
+      if (launchFlags.catalog) online.runSearch(term);
+    }
   };
 
   return (

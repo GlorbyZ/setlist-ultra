@@ -1,7 +1,7 @@
-﻿import { type Href, useRouter } from 'expo-router';
+﻿import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
-import { useAudioPlayer } from 'expo-audio';
+import { ActivityIndicator, AppState, Pressable, View } from 'react-native';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
 import { LiveChrome } from '@/src/components/LiveChrome';
@@ -10,7 +10,7 @@ import { SetlistQuickAccess } from '@/src/components/SetlistQuickAccess';
 import { SongViewer, type SongViewerHandle } from '@/src/components/SongViewer';
 import { SwipePager, type SwipePagerPage } from '@/src/components/SwipePager';
 import { useLiveChartSession } from '@/src/display/useLiveChartSession';
-import { useLiveQueue } from '@/src/hooks/useLiveQueue';
+import { useLiveQueue, type LiveQueueItem } from '@/src/hooks/useLiveQueue';
 import { resolveAutoscrollSeconds } from '@/src/lib/autoscroll';
 import {
   currentSoundingKey,
@@ -22,45 +22,87 @@ import {
 import { useKeepAwake } from 'expo-keep-awake';
 import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
 import { liveScrollFor, rememberLiveScroll } from '@/src/lib/liveSession';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { openLocalMedia } from '@/src/lib/mediaStore';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 import { chartJumpTargets } from '@setlist-ultra/core';
 
+function stopPlayer(player: { pause: () => void; seekTo: (n: number) => Promise<void> }) {
+  try {
+    player.pause();
+    void player.seekTo(0);
+  } catch {
+    /* player may already be released */
+  }
+}
+
 export default function LiveTab() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   useKeepAwake();
-  const { queue, index, song, loading, go, goTo, setContext, hasSetContext, followBand, setFollowBand } = useLiveQueue();
+  const { queue, index, entry, song, loading, go, goTo, setContext, hasSetContext, followBand, setFollowBand } =
+    useLiveQueue();
   const { fontSize, setFontSize, hideChords, setHideChords } = useLiveChartSession();
   const [keyShift, setKeyShift] = useState(0);
   const [capo, setCapo] = useState(0);
   const [scrolling, setScrolling] = useState(false);
   const [setlistOpen, setSetlistOpen] = useState(false);
   const viewerRef = useRef<SongViewerHandle>(null);
-  const audioSource = song?.linkedAudio ? { uri: song.linkedAudio } : undefined;
+  const audioSource = launchFlags.audio && song?.linkedAudio ? { uri: song.linkedAudio } : undefined;
   const audioPlayer = useAudioPlayer(audioSource);
-  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
 
-  const prevSong = index > 0 ? queue[index - 1] : null;
-  const nextSong = index < queue.length - 1 ? queue[index + 1] : null;
+  const prev = index > 0 ? queue[index - 1] : null;
+  const next = index < queue.length - 1 ? queue[index + 1] : null;
+  const prevSong = prev?.kind === 'song' ? prev.song ?? null : null;
+  const nextSong = next?.kind === 'song' ? next.song ?? null : null;
 
   useEffect(() => {
     warmSongDocuments([prevSong, song, nextSong]);
   }, [prevSong?.id, song?.id, nextSong?.id, prevSong?.updatedAt, song?.updatedAt, nextSong?.updatedAt]);
 
-  // Sync Key/Capo from storage only when the active song changes.
-  // Do NOT depend on song.capo/keyShift — persist writes those and would feedback-loop with refresh/reload.
   useEffect(() => {
-    if (!song) return;
-    setCapo(song.capo ?? 0);
-    setKeyShift(song.keyShift ?? 0);
     setScrolling(false);
-    if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
-    setAudioPlaying(false);
-  }, [song?.id]);
+    stopPlayer(audioPlayer);
+    if (song) {
+      setCapo(song.capo ?? 0);
+      setKeyShift(song.keyShift ?? 0);
+      if (song.midiOnLoad) void sendMidiOnLoad(song.midiOnLoad);
+    }
+  }, [entry?.key]);
+
+  useEffect(() => {
+    if (!audioStatus.didJustFinish) return;
+    stopPlayer(audioPlayer);
+  }, [audioStatus.didJustFinish, audioPlayer]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        try {
+          audioPlayer.pause();
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [audioPlayer]);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        try {
+          audioPlayer.pause();
+        } catch {
+          /* ignore */
+        }
+      };
+    }, [audioPlayer]),
+  );
 
   useEffect(() => {
     return subscribePedals((action) => {
@@ -71,27 +113,28 @@ export default function LiveTab() {
     });
   }, [go]);
 
-  // Persist fire-and-forget. Local state is source of truth until song.id changes;
-  // useLiveQueue reload on focus picks up DB values. Avoid refresh+reload here (update-depth loop).
   const changeKeyShift = useCallback(
-    (next: number) => {
-      setKeyShift(next);
+    (nextShift: number) => {
+      setKeyShift(nextShift);
       if (!song) return;
-      void persistLiveKeyCapo(song.id, { keyShift: next });
+      void persistLiveKeyCapo(song.id, { keyShift: nextShift });
     },
     [song],
   );
 
   const changeCapo = useCallback(
-    (next: number) => {
-      setCapo(next);
+    (nextCapo: number) => {
+      setCapo(nextCapo);
       if (!song) return;
-      void persistLiveKeyCapo(song.id, { capo: next });
+      void persistLiveKeyCapo(song.id, { capo: nextCapo });
     },
     [song],
   );
 
-  const chart = useMemo(() => (song ? getCachedSongDocument(song) : null), [song?.id, song?.contentAst, song?.chordpro, song?.updatedAt]);
+  const chart = useMemo(
+    () => (song ? getCachedSongDocument(song) : null),
+    [song?.id, song?.contentAst, song?.chordpro, song?.updatedAt],
+  );
   const prevChart = useMemo(
     () => (prevSong ? getCachedSongDocument(prevSong) : null),
     [prevSong?.id, prevSong?.contentAst, prevSong?.chordpro, prevSong?.updatedAt],
@@ -109,7 +152,7 @@ export default function LiveTab() {
     );
   }
 
-  if (!song || !chart) {
+  if (!entry) {
     return (
       <View style={styles.center}>
         <Text style={styles.body}>Pick a song or set.</Text>
@@ -119,78 +162,65 @@ export default function LiveTab() {
     );
   }
 
-  const duration = resolveAutoscrollSeconds(song.duration2, song.durationSeconds);
+  const duration = song ? resolveAutoscrollSeconds(song.duration2, song.durationSeconds) : undefined;
   const reserveTopLeft = hasSetContext;
-  const sounding = currentSoundingKey(song.originalKey, keyShift);
-  const canJumpSection = chartJumpTargets(chart).length > 0;
+  const sounding = song ? currentSoundingKey(song.originalKey, keyShift) : '';
+  const canJumpSection = chart ? chartJumpTargets(chart).length > 0 : false;
+
+  const pageFor = (item: LiveQueueItem, queueIndex: number, role: 'prev' | 'current' | 'next'): SwipePagerPage => {
+    if (item.kind !== 'song' || !item.song) {
+      return {
+        key: item.key,
+        queueIndex,
+        content: (
+          <LiveSongPage title={item.title} meta={item.kind === 'timer' ? 'Break' : 'Note'} reserveTopLeft={reserveTopLeft}>
+            <LiveBreakBody
+              kind={item.kind}
+              body={item.noteContent ?? ''}
+              seconds={item.timerSeconds ?? 0}
+              active={role === 'current'}
+            />
+          </LiveSongPage>
+        ),
+      };
+    }
+    const doc =
+      role === 'current' ? chart : role === 'prev' ? prevChart : nextChart;
+    const row = item.song;
+    const isCurrent = role === 'current';
+    return {
+      key: item.key,
+      queueIndex,
+      content: (
+        <LiveSongPage
+          title={row.title}
+          meta={songMetaLine(row, isCurrent ? keyShift : row.keyShift ?? 0)}
+          capo={isCurrent ? capo : row.capo ?? 0}
+          onCapo={isCurrent ? (d) => changeCapo(wrapCapo(capo, d)) : undefined}
+          reserveTopLeft={reserveTopLeft}>
+          {doc ? (
+            <SongViewer
+              ref={isCurrent ? viewerRef : undefined}
+              document={doc}
+              transpose={isCurrent ? keyShift : row.keyShift ?? 0}
+              capo={isCurrent ? capo : row.capo ?? 0}
+              hideChords={hideChords}
+              autoScrollSeconds={isCurrent && scrolling ? duration : undefined}
+              fontSize={fontSize}
+              onFontSizeChange={isCurrent ? setFontSize : undefined}
+              initialScrollY={liveScrollFor(item.key)}
+              onScrollOffset={isCurrent ? (y) => rememberLiveScroll(item.key, y) : undefined}
+            />
+          ) : null}
+        </LiveSongPage>
+      ),
+    };
+  };
+
   const pages: SwipePagerPage[] = [];
-  if (prevChart && prevSong) {
-    pages.push({
-      key: prevSong.id,
-      queueIndex: index - 1,
-      content: (
-        <LiveSongPage
-          title={prevSong.title}
-          meta={songMetaLine(prevSong, prevSong.keyShift ?? 0)}
-          capo={prevSong.capo ?? 0}
-          reserveTopLeft={reserveTopLeft}>
-          <SongViewer
-            document={prevChart}
-            transpose={prevSong.keyShift ?? 0}
-            capo={prevSong.capo ?? 0}
-            hideChords={hideChords}
-            fontSize={fontSize}
-          />
-        </LiveSongPage>
-      ),
-    });
-  }
-  pages.push({
-    key: song.id,
-    queueIndex: index,
-    content: (
-      <LiveSongPage
-        title={song.title}
-        meta={songMetaLine(song, keyShift)}
-        capo={capo}
-        onCapo={(d) => changeCapo(wrapCapo(capo, d))}
-        reserveTopLeft={reserveTopLeft}>
-          <SongViewer
-            ref={viewerRef}
-            document={chart}
-            transpose={keyShift}
-            capo={capo}
-            hideChords={hideChords}
-            autoScrollSeconds={scrolling ? duration : undefined}
-            fontSize={fontSize}
-            onFontSizeChange={setFontSize}
-            initialScrollY={liveScrollFor(song.id)}
-            onScrollOffset={(y) => rememberLiveScroll(song.id, y)}
-          />
-      </LiveSongPage>
-    ),
-  });
-  if (nextChart && nextSong) {
-    pages.push({
-      key: nextSong.id,
-      queueIndex: index + 1,
-      content: (
-        <LiveSongPage
-          title={nextSong.title}
-          meta={songMetaLine(nextSong, nextSong.keyShift ?? 0)}
-          capo={nextSong.capo ?? 0}
-          reserveTopLeft={reserveTopLeft}>
-          <SongViewer
-            document={nextChart}
-            transpose={nextSong.keyShift ?? 0}
-            capo={nextSong.capo ?? 0}
-            hideChords={hideChords}
-            fontSize={fontSize}
-          />
-        </LiveSongPage>
-      ),
-    });
-  }
+  if (prev) pages.push(pageFor(prev, index - 1, 'prev'));
+  pages.push(pageFor(entry, index, 'current'));
+  if (next) pages.push(pageFor(next, index + 1, 'next'));
 
   return (
     <View style={{ flex: 1 }}>
@@ -208,40 +238,41 @@ export default function LiveTab() {
           </Pressable>
         </View>
       ) : null}
-      {song.contentKind === 'pdf' && song.mediaUri ? (
+      {song?.contentKind === 'pdf' && song.mediaUri ? (
         <Pressable
           style={styles.mediaBar}
           onPress={() => void openLocalMedia(song.mediaUri!, 'application/pdf', song.title)}>
           <Text style={styles.mediaBarText}>Open PDF in another app (no in-app markup)</Text>
         </Pressable>
       ) : null}
-      {song.linkedAudio ? (
+      {launchFlags.audio && song?.linkedAudio ? (
         <Pressable
           style={styles.mediaBar}
           onPress={() => {
-            if (audioPlaying) {
-              audioPlayer.pause();
-              setAudioPlaying(false);
-            } else {
-              audioPlayer.play();
-              setAudioPlaying(true);
-            }
+            if (audioStatus.playing) audioPlayer.pause();
+            else audioPlayer.play();
           }}>
-          <Text style={styles.mediaBarText}>{audioPlaying ? 'Pause backing track' : 'Play backing track'}</Text>
+          <Text style={styles.mediaBarText}>
+            {audioStatus.error
+              ? 'Backing track failed'
+              : audioStatus.playing
+                ? 'Pause backing track'
+                : 'Play backing track'}
+          </Text>
         </Pressable>
       ) : null}
       <LiveChrome
-        chromeKey={song.id}
-        tempo={song.tempo}
-        capo={capo}
+        chromeKey={entry.key}
+        tempo={song?.tempo}
+        capo={song ? capo : 0}
         soundingKey={sounding}
-        onCapo={(d) => changeCapo(wrapCapo(capo, d))}
-        onCapoPick={(n) => changeCapo(n)}
-        onEdit={() => router.push(('/editor/' + song.id) as Href)}
-        onPrev={prevSong ? () => go(-1) : undefined}
-        onNext={nextSong ? () => go(1) : undefined}
-        onTranspose={(d) => changeKeyShift(keyShift + d)}
-        onKeyPick={(keyName) => changeKeyShift(keyShiftToPick(song.originalKey, keyName, keyShift))}
+        onCapo={song ? (d) => changeCapo(wrapCapo(capo, d)) : undefined}
+        onCapoPick={song ? (n) => changeCapo(n) : undefined}
+        onEdit={song ? () => router.push(('/editor/' + song.id) as Href) : undefined}
+        onPrev={prev ? () => go(-1) : undefined}
+        onNext={next ? () => go(1) : undefined}
+        onTranspose={song ? (d) => changeKeyShift(keyShift + d) : undefined}
+        onKeyPick={song ? (keyName) => changeKeyShift(keyShiftToPick(song.originalKey, keyName, keyShift)) : undefined}
         onToggleLyrics={() => setHideChords((v) => !v)}
         lyricsOnly={hideChords}
         onToggleScroll={() => setScrolling((v) => !v)}
@@ -257,8 +288,8 @@ export default function LiveTab() {
         }}>
         <SwipePager
           index={index}
-          onPrev={prevSong ? () => go(-1) : undefined}
-          onNext={nextSong ? () => go(1) : undefined}
+          onPrev={prev ? () => go(-1) : undefined}
+          onNext={next ? () => go(1) : undefined}
           pages={pages}
         />
       </LiveChrome>
@@ -269,11 +300,53 @@ export default function LiveTab() {
           onClose={() => setSetlistOpen(false)}
           setTitle={setContext.title}
           eventDate={setContext.eventDate}
-          songs={queue}
-          currentSongId={song.id}
-          onSelectSong={(_id, songIndex) => goTo(songIndex)}
+          entries={queue}
+          currentKey={entry.key}
+          onSelect={(_key, songIndex) => goTo(songIndex)}
         />
       ) : null}
+    </View>
+  );
+}
+
+function LiveBreakBody({
+  kind,
+  body,
+  seconds,
+  active,
+}: {
+  kind: 'note' | 'timer' | 'song';
+  body: string;
+  seconds: number;
+  active: boolean;
+}) {
+  const { theme } = useTheme();
+  const [left, setLeft] = useState(seconds);
+
+  useEffect(() => {
+    if (kind !== 'timer' || !active) {
+      setLeft(seconds);
+      return;
+    }
+    setLeft(seconds);
+    const timer = setInterval(() => {
+      setLeft((n) => Math.max(0, n - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [kind, seconds, active]);
+
+  if (kind === 'timer') {
+    return (
+      <View style={{ padding: 24, alignItems: 'center' }}>
+        <Text style={{ color: theme.text, fontSize: 48, fontWeight: '800' }}>{left}s</Text>
+        <Text style={{ color: theme.muted, marginTop: 8 }}>Break · swipe when you are ready</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ padding: 24 }}>
+      <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700', lineHeight: 30 }}>{body || 'Note'}</Text>
     </View>
   );
 }
@@ -317,4 +390,3 @@ function makeStyles(t: AppTheme) {
     mediaBarText: { color: t.accent, fontWeight: '700' as const, fontSize: 13 },
   };
 }
-

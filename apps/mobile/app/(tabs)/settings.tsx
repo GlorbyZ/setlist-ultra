@@ -11,6 +11,7 @@ import { AiSettingsPanel } from '@/src/components/AiSettingsPanel';
 import { SyncOverlay } from '@/src/components/SyncOverlay';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { isHostedConfigured } from '@/src/lib/config';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes } from '@/src/lib/repository';
 import { saveBinaryFile } from '@/src/lib/files';
 import {
@@ -104,9 +105,13 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>AI</Text>
-      <Text style={styles.body}>Bring your own API key (Gemini default). Keys stay in SecureStore on this device.</Text>
-      <AiSettingsPanel compact />
+      {launchFlags.ai ? (
+        <>
+          <Text style={styles.heading}>AI</Text>
+          <Text style={styles.body}>Bring your own API key (Gemini default). Keys stay in SecureStore on this device.</Text>
+          <AiSettingsPanel compact />
+        </>
+      ) : null}
 
       <Text style={styles.heading}>Look & Stage</Text>
       <Pressable style={styles.navRow} onPress={() => router.push('/look')}>
@@ -281,6 +286,9 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text style={styles.heading}>Backup</Text>
+      <Text style={styles.body}>
+        Songs and sets only. Attached audio and PDFs stay in this app&apos;s files and are not inside the backup.
+      </Text>
       <Pressable
         style={styles.secondary}
         onPress={() =>
