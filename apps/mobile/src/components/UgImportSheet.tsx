@@ -85,7 +85,7 @@ export function UgImportSheet({ group, onClose, onImported }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const remote = await lookupRemoteChart(fingerprintContent(url), 'ultimate_guitar', url);
+      const remote = await lookupRemoteChart(fingerprintContent(url), 'ultimate_guitar', url).catch(() => null);
       if (remote?.chordpro && !previewShift) {
         const songId = await insertLibrarySong({
           title: remote.title || 'Imported chart',

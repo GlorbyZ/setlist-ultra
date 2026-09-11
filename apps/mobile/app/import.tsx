@@ -81,7 +81,7 @@ export default function ImportScreen() {
   const importUrl = async (url: string) => {
     setBusy(true);
     try {
-      const remote = await lookupRemoteChart(fingerprintContent(url), 'ultimate_guitar', url);
+      const remote = await lookupRemoteChart(fingerprintContent(url), 'ultimate_guitar', url).catch(() => null);
       if (remote?.chordpro) {
         const songId = await insertLibrarySong({
           title: remote.title || 'Imported chart',

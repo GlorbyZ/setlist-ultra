@@ -400,26 +400,56 @@ export async function hostedSessionEmail(): Promise<string | null> {
   return data.user?.email ?? null;
 }
 
+async function clearDeadHostedSession() {
+  const supabase = getHostedClient();
+  try {
+    await supabase?.auth.signOut();
+  } catch {
+    /* already invalid */
+  }
+  await saveSyncState({
+    provider: 'local',
+    accountEmail: null,
+    accessToken: null,
+    refreshToken: null,
+    tokenExpiry: null,
+  });
+}
+
+/** Hosted chart lookup must never block local UG/file import (stale JWT, signed-out RLS, etc.). */
 export async function lookupRemoteChart(contentHash: string, sourceProvider?: string, sourceExternalId?: string) {
   const supabase = getHostedClient();
   if (!supabase) return null;
 
-  const provider = blankToNull(sourceProvider);
-  const externalId = blankToNull(sourceExternalId);
-  if (provider && externalId) {
-    const bySource = await supabase
-      .from('charts')
-      .select('*')
-      .eq('source_provider', provider)
-      .eq('source_external_id', externalId)
-      .maybeSingle();
-    if (bySource.error && bySource.error.code !== 'PGRST116') throw hostedError(bySource.error);
-    if (bySource.data) return bySource.data as HostedChart;
-  }
+  try {
+    await restoreSessionIfNeeded();
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) return null;
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      await clearDeadHostedSession();
+      return null;
+    }
 
-  const byHash = await supabase.from('charts').select('*').eq('content_hash', contentHash).maybeSingle();
-  if (byHash.error && byHash.error.code !== 'PGRST116') throw hostedError(byHash.error);
-  return (byHash.data as HostedChart | null) ?? null;
+    const provider = blankToNull(sourceProvider);
+    const externalId = blankToNull(sourceExternalId);
+    if (provider && externalId) {
+      const bySource = await supabase
+        .from('charts')
+        .select('*')
+        .eq('source_provider', provider)
+        .eq('source_external_id', externalId)
+        .maybeSingle();
+      if (bySource.error && bySource.error.code !== 'PGRST116') return null;
+      if (bySource.data) return bySource.data as HostedChart;
+    }
+
+    const byHash = await supabase.from('charts').select('*').eq('content_hash', contentHash).maybeSingle();
+    if (byHash.error && byHash.error.code !== 'PGRST116') return null;
+    return (byHash.data as HostedChart | null) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function pushChartToHost(input: {

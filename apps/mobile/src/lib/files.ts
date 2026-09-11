@@ -36,9 +36,18 @@ export async function pickBinaryFile(accept = '.sbp,.sbpbackup,.cho,.chopro,.crd
   if (typeof asset.size === 'number' && asset.size > IMPORT_LIMITS.maxUncompressedBytes) {
     throw new Error('This file is too large to import safely.');
   }
-  const response = await fetch(asset.uri);
-  const buffer = await response.arrayBuffer();
-  return { name: asset.name ?? 'import.sbp', bytes: new Uint8Array(buffer) };
+  // Android content:// URIs often yield an empty body through fetch(). Read via the FS cache instead.
+  let bytes: Uint8Array;
+  try {
+    bytes = await readBytesFromUri(asset.uri);
+  } catch {
+    const response = await fetch(asset.uri);
+    bytes = new Uint8Array(await response.arrayBuffer());
+  }
+  if (!bytes.byteLength) {
+    throw new Error('The file was empty or could not be read.');
+  }
+  return { name: asset.name ?? 'import.sbp', bytes };
 }
 
 export async function saveBinaryFile(filename: string, bytes: Uint8Array, mime = 'application/zip') {
