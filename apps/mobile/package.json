@@ -1,7 +1,7 @@
 {
   "name": "mobile",
   "main": "expo-router/entry",
-  "version": "5.0.11",
+  "version": "5.0.12",
   "private": true,
   "scripts": {
     "preflight": "powershell -ExecutionPolicy Bypass -File ./scripts/preflight.ps1",
@@ -44,6 +44,7 @@
     "expo-print": "~57.0.1",
     "expo-router": "~57.0.19",
     "expo-secure-store": "~57.0.3",
+    "expo-sensors": "~57.0.3",
     "expo-share-intent": "^8.0.1",
     "expo-sharing": "~57.0.18",
     "expo-splash-screen": "~57.0.8",

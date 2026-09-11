@@ -2,7 +2,7 @@
   "expo": {
     "name": "Setlist Ultra",
     "slug": "setlist-ultra",
-    "version": "5.0.11",
+    "version": "5.0.12",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "setlistultra",
@@ -47,10 +47,11 @@
           }
         ]
       },
-      "buildNumber": "49"
+      "buildNumber": "50"
     },
     "android": {
       "package": "com.setlistultra.app",
+      "launchMode": "singleTask",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
@@ -120,7 +121,7 @@
           ]
         }
       ],
-      "versionCode": 68
+      "versionCode": 69
     },
     "web": {
       "bundler": "metro",

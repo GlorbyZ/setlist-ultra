@@ -11,6 +11,7 @@ import { AiSettingsPanel } from '@/src/components/AiSettingsPanel';
 import { SyncOverlay } from '@/src/components/SyncOverlay';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { config, isHostedConfigured } from '@/src/lib/config';
+import { composeBugReportMailto } from '@/src/lib/bugReport';
 import { launchFlags } from '@/src/lib/launchFlags';
 import { cleanDuplicateSongs, cleanDuplicateSetlists, exportSbpBytes, importAnyChartFile } from '@/src/lib/repository';
 import { pickBinaryFile, saveBinaryFile } from '@/src/lib/files';
@@ -399,6 +400,13 @@ export default function SettingsScreen() {
         <View style={styles.toolCopy}>
           <Text style={styles.navTitle}>Email support</Text>
           <Text style={styles.navHint}>{config.supportEmail}</Text>
+        </View>
+        <Text style={styles.navChevron}>›</Text>
+      </Pressable>
+      <Pressable style={styles.navRow} onPress={() => void Linking.openURL(composeBugReportMailto())}>
+        <View style={styles.toolCopy}>
+          <Text style={styles.navTitle}>Report a bug</Text>
+          <Text style={styles.navHint}>Shake the phone, three-finger tap, or send from here.</Text>
         </View>
         <Text style={styles.navChevron}>›</Text>
       </Pressable>

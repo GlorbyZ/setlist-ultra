@@ -1,6 +1,7 @@
 export const IMPORT_LIMITS = {
   maxEntries: 4000,
-  maxUncompressedBytes: 80 * 1024 * 1024,
+  /** Compressed file and unzipped contents. 102 MB SBP backups need headroom after inflate. */
+  maxUncompressedBytes: 512 * 1024 * 1024,
   maxCompressionRatio: 80,
 };
 

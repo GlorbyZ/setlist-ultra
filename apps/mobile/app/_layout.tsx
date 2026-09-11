@@ -11,6 +11,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
 import { IncomingShare } from '@/src/components/IncomingShare';
+import { ImportSessionHost } from '@/src/components/ImportSessionHost';
+import { BugReportHost } from '@/src/components/BugReportHost';
 import { SplashGate } from '@/src/components/SplashGate';
 import { DisplayPrefsProvider } from '@/src/display/DisplayPrefsProvider';
 import { LibraryProvider } from '@/src/providers/LibraryProvider';
@@ -39,6 +41,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000000' }}>
+      <BugReportHost>
       <SafeAreaProvider>
       <ShareIntentProvider>
         <AppThemeProvider>
@@ -46,6 +49,7 @@ export default function RootLayout() {
           <LibraryProvider>
             <SplashGate fontsReady={fontsReady}>
               <IncomingShare />
+              <ImportSessionHost />
               <RootLayoutNav />
             </SplashGate>
           </LibraryProvider>
@@ -53,6 +57,7 @@ export default function RootLayout() {
         </AppThemeProvider>
       </ShareIntentProvider>
       </SafeAreaProvider>
+      </BugReportHost>
     </GestureHandlerRootView>
   );
 }
@@ -91,7 +96,7 @@ function RootLayoutNav() {
         <Stack.Screen name="song/[id]" options={{ title: '', headerShadowVisible: false }} />
         <Stack.Screen name="editor/[id]" options={{ title: 'Editor' }} />
         <Stack.Screen name="setlist/[id]" options={{ title: 'Set' }} />
-        <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Add songs' }} />
+        <Stack.Screen name="import" options={{ title: 'Add songs' }} />
         <Stack.Screen name="groups" options={{ title: 'Groups' }} />
         <Stack.Screen name="look" options={{ title: 'Look & Stage' }} />
         <Stack.Screen name="legal/privacy" options={{ title: 'Privacy' }} />

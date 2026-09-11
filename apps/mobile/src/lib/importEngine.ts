@@ -11,7 +11,7 @@ import {
 } from '@setlist-ultra/core';
 import { folders, importJobs, setlistItems, setlists, songs } from '@setlist-ultra/db';
 import { getDatabase } from './db';
-import { ensureWorkspaceForScope, workspaceIdForScope, type LibraryScope } from './domain';
+import { enqueueOutbox, ensureWorkspaceForScope, PERSONAL_WORKSPACE_ID, workspaceIdForScope, type LibraryScope } from './domain';
 import { persistMediaFile } from './mediaStore';
 import {
   findSongByTitleArtist,
@@ -192,9 +192,37 @@ async function persistJob(
 
 async function promoteJob(jobId: string) {
   const db = await getDatabase();
+  const stagedSongs = await db.select().from(songs).where(eq(songs.importJobId, jobId));
+  const stagedSets = await db.select().from(setlists).where(eq(setlists.importJobId, jobId));
   await db.update(songs).set({ importJobId: null }).where(eq(songs.importJobId, jobId));
   await db.update(setlists).set({ importJobId: null }).where(eq(setlists.importJobId, jobId));
   await db.update(folders).set({ importJobId: null }).where(eq(folders.importJobId, jobId));
+  for (const song of stagedSongs) {
+    if (song.deleted) continue;
+    await enqueueOutbox({
+      workspaceId: song.workspaceId ?? PERSONAL_WORKSPACE_ID,
+      entityId: song.id,
+      entityType: 'arrangement',
+      operationType: 'arrangement.create',
+      localRevision: song.localRevision ?? 1,
+      payload: { title: song.title, artist: song.artist ?? '', contentHash: song.contentHash },
+    });
+  }
+  for (const set of stagedSets) {
+    if (set.deleted) continue;
+    await enqueueOutbox({
+      workspaceId: set.workspaceId ?? PERSONAL_WORKSPACE_ID,
+      entityId: set.id,
+      entityType: 'setlist',
+      operationType: 'setlist.create',
+      localRevision: set.localRevision ?? 1,
+      payload: { title: set.title },
+    });
+  }
+}
+
+export async function promoteImportJob(jobId: string) {
+  await promoteJob(jobId);
 }
 
 export async function importSbpArchive(
@@ -466,6 +494,13 @@ export async function importSbpArchive(
       createdIds,
       errorText: cancelled ? null : error instanceof Error ? error.message : String(error),
     });
+    if (!cancelled) {
+      try {
+        await promoteJob(jobId);
+      } catch {
+        /* songs may stay hidden until the next library refresh recovers them */
+      }
+    }
     emit(cancelled ? 'songs' : 'done', undefined, cancelled ? 'paused' : 'failed');
     throw error;
   }

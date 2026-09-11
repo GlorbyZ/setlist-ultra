@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -21,18 +21,16 @@ import { useUgOnlineSearch } from '@/src/hooks/useUgOnlineSearch';
 import {
   createBlankSong,
   getLastCompletedImport,
-  importAnyChartFile,
   insertLibrarySong,
   listResumableImports,
   saveSongFromUg,
   undoImportJob,
-  type ImportProgressEvent,
 } from '@/src/lib/repository';
-import { ImportOverlay } from '@/src/components/ImportOverlay';
+import { beginFilePickImport, getImportSession, subscribeImportSession } from '@/src/lib/importSession';
 import { importUgTab, type UgSongGroup } from '@/src/lib/ug-api';
 import { config } from '@/src/lib/config';
 import { launchFlags } from '@/src/lib/launchFlags';
-import { pickBinaryFile, pickImage } from '@/src/lib/files';
+import { pickImage } from '@/src/lib/files';
 import { lookupRemoteChart } from '@/src/lib/hosted';
 import { openSongInLive } from '@/src/lib/openSongInLive';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -50,12 +48,9 @@ export default function ImportScreen() {
   const [title, setTitle] = useState('Untitled');
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<{ title: string; body: string } | null>(null);
-  const [importProgress, setImportProgress] = useState<ImportProgressEvent | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importFinished, setImportFinished] = useState(false);
   const [pausedHint, setPausedHint] = useState<string | null>(null);
-  const importAbort = useRef<AbortController | null>(null);
-  const importJobId = useRef<string | null>(null);
+  const fileSession = useSyncExternalStore(subscribeImportSession, getImportSession, getImportSession);
+  const fileBusy = busy || fileSession.running;
 
   useEffect(() => {
     void listResumableImports().then((jobs) => {
@@ -106,57 +101,7 @@ export default function ImportScreen() {
     }
   };
 
-  const importFile = async () => {
-    const picked = await pickBinaryFile();
-    if (!picked) return;
-    const controller = new AbortController();
-    importAbort.current = controller;
-    setBusy(true);
-    setImportError(null);
-    setImportFinished(false);
-    setImportProgress({
-      phase: 'songs',
-      totalSongs: 0,
-      processedSongs: 0,
-      created: 0,
-      reused: 0,
-      variants: 0,
-      skipped: 0,
-      failed: 0,
-    });
-    try {
-      const result = await importAnyChartFile(picked.bytes, picked.name, {
-        signal: controller.signal,
-        onProgress: (event) => {
-          if (event.jobId) importJobId.current = event.jobId;
-          setImportProgress(event);
-        },
-      });
-      await refresh();
-      if (result.kind === 'song' && result.songId) {
-        setImportProgress(null);
-        await afterImport(result.songId);
-        return;
-      }
-      setImportFinished(true);
-      setPausedHint(null);
-    } catch (error) {
-      const cancelled = error instanceof Error && error.name === 'AbortError';
-      if (cancelled) {
-        setImportProgress(null);
-        setPausedHint('Import paused. Choose the same file again to resume.');
-        setDialog({
-          title: 'Import paused',
-          body: 'Stopped at a checkpoint. Songs already read stay staged until you resume or undo.',
-        });
-        return;
-      }
-      setImportError(error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setBusy(false);
-      importAbort.current = null;
-    }
-  };
+  const importFile = () => beginFilePickImport();
 
   const importPaste = async () => {
     setBusy(true);
@@ -222,7 +167,7 @@ export default function ImportScreen() {
       {tab === 'file' ? (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>.sbp / .sbpbackup / ChordPro</Text>
-          <BrandButton label="Choose file" onPress={() => void importFile()} disabled={busy} busy={busy && !importProgress} />
+          <BrandButton label="Choose file" onPress={() => void importFile()} disabled={fileBusy} busy={fileSession.running && !fileSession.progress} />
           {pausedHint ? <Text style={styles.progressBody}>{pausedHint}</Text> : null}
           <Pressable
             style={styles.ghost}
@@ -368,34 +313,6 @@ export default function ImportScreen() {
             await openSongInLive(router, songId, 'replace');
           })();
         }}
-      />
-
-      <ImportOverlay
-        visible={Boolean(importProgress)}
-        progress={importProgress}
-        error={importError}
-        finished={importFinished}
-        onCancel={() => importAbort.current?.abort()}
-        onDone={() => {
-          setImportProgress(null);
-          setImportError(null);
-          setImportFinished(false);
-          if (!importError) router.back();
-        }}
-        onUndo={
-          importJobId.current
-            ? () =>
-                void (async () => {
-                  const id = importJobId.current;
-                  if (!id) return;
-                  await undoImportJob(id);
-                  await refresh();
-                  setImportProgress(null);
-                  setImportFinished(false);
-                  setDialog({ title: 'Import undone', body: 'Songs and sets from that file were removed.' });
-                })()
-            : undefined
-        }
       />
       <BrandDialog
         visible={Boolean(dialog)}

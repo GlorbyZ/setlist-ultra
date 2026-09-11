@@ -6,6 +6,7 @@ import {
   listOrgs,
   listSetlists,
   listSongs,
+  recoverHiddenImportSongs,
   patchAppState,
   type LibraryScope,
 } from '@/src/lib/repository';
@@ -38,6 +39,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     if (!opts?.silent) setLoading(true);
     setError(null);
     const load = async () => {
+      await recoverHiddenImportSongs();
       await seedDemoSongIfEmpty();
       const current = await getLibraryScope();
       setScopeState(current);

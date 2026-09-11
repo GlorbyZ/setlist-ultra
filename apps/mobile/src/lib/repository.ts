@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import {
   compactCanonicalMap,
   pickCanonicalDuplicate,
@@ -591,14 +591,16 @@ export async function insertLibrarySongResult(input: {
       chordpro: input.chordpro,
       ast,
     });
-    await enqueueOutbox({
-      workspaceId,
-      entityId: id,
-      entityType: 'arrangement',
-      operationType: 'arrangement.create',
-      localRevision: 1,
-      payload: { title: input.title, artist: input.artist ?? '', contentHash },
-    });
+    if (!input.importJobId) {
+      await enqueueOutbox({
+        workspaceId,
+        entityId: id,
+        entityType: 'arrangement',
+        operationType: 'arrangement.create',
+        localRevision: 1,
+        payload: { title: input.title, artist: input.artist ?? '', contentHash },
+      });
+    }
   });
 
   return { id, outcome: 'created' };
@@ -1505,6 +1507,22 @@ export async function getLastCompletedImport() {
     .orderBy(desc(importJobs.updatedAt))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/** Failed or crashed imports hide songs behind importJobId. Promote them so the library can show them. */
+export async function recoverHiddenImportSongs() {
+  const { isImportSessionRunning } = await import('./importSession');
+  if (isImportSessionRunning()) return;
+  const { promoteImportJob } = await import('./importEngine');
+  const db = await getDatabase();
+  const jobs = await db.select().from(importJobs);
+  const paused = new Set(jobs.filter((job) => job.status === 'paused').map((job) => job.id));
+  const hidden = await db.select({ importJobId: songs.importJobId }).from(songs).where(isNotNull(songs.importJobId));
+  const ids = [...new Set(hidden.map((row) => row.importJobId).filter((id): id is string => Boolean(id)))];
+  for (const jobId of ids) {
+    if (paused.has(jobId)) continue;
+    await promoteImportJob(jobId);
+  }
 }
 
 async function saveImportJobState(

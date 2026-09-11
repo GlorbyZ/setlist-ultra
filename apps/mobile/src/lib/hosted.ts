@@ -17,6 +17,7 @@ import {
   titlesLikelySame,
   type SyncProgressEvent,
 } from '@setlist-ultra/core';
+import { noteAppError } from './bugReport';
 import { config, isHostedConfigured } from './config';
 import { authStorage } from './authStorage';
 import {
@@ -95,15 +96,19 @@ export function getHostedClient() {
 }
 
 function hostedError(error: unknown): Error {
-  if (error instanceof Error) return error;
-  if (error && typeof error === 'object') {
+  let err: Error;
+  if (error instanceof Error) err = error;
+  else if (error && typeof error === 'object') {
     const row = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
     const parts = [row.message, row.details, row.hint, row.code].filter(
       (part): part is string => typeof part === 'string' && part.trim().length > 0,
     );
-    if (parts.length) return new Error(parts.join(' · '));
+    err = parts.length ? new Error(parts.join(' · ')) : new Error('Sync failed.');
+  } else {
+    err = new Error('Sync failed.');
   }
-  return new Error('Sync failed.');
+  noteAppError(`sync: ${err.message}`);
+  return err;
 }
 
 function blankToNull(value?: string | null) {
@@ -848,6 +853,7 @@ export async function syncPersonalLibrary(
     }
     if (!shouldPushEntity(song.syncStatus, song.deleted)) continue;
 
+    let uploaded = false;
     try {
       const operationId = outboxIdFor(pending, song.id);
       if (song.deleted) {
@@ -909,12 +915,29 @@ export async function syncPersonalLibrary(
       songsByRemoteId.set(remoteLibraryId, { ...song, remoteId: remoteLibraryId, syncStatus: 'synced' });
       await updateSong(song.id, { remoteId: remoteLibraryId, syncStatus: 'synced' }, { origin: 'sync' });
       await completeOutboxForEntity(song.id);
+      uploaded = true;
     } finally {
-      progress.tick({ phase: 'push-songs', pushedSongs: progress.state.pushedSongs + 1 });
+      progress.tick({
+        phase: 'push-songs',
+        ...(uploaded ? { pushedSongs: progress.state.pushedSongs + 1 } : {}),
+      });
     }
   }
 
   const checkpoint = repair ? null : await getSyncCheckpoint(workspaceId);
+  const fetchRemoteLibrary = (cursor?: string | null) =>
+    fetchAllHostedRows<RemoteLibraryRow>(() => {
+      let query = orgId
+        ? supabase.from('library_items').select('*, charts(*)').eq('org_id', orgId)
+        : supabase.from('library_items').select('*, charts(*)').eq('user_id', user.id);
+      if (cursor) query = query.gt('updated_at', cursor);
+      return query;
+    });
+  let remoteSongRows = await fetchRemoteLibrary(checkpoint?.cursor);
+  const visibleLocal = localSongs.filter((song) => !song.deleted).length;
+  if (!repair && remoteSongRows.length === 0 && visibleLocal <= 1) {
+    remoteSongRows = await fetchRemoteLibrary(null);
+  }
   const libraryMaps: HostedLibraryMaps = {
     scope,
     libraryIdBySong,
@@ -924,13 +947,6 @@ export async function syncPersonalLibrary(
     repair,
     progress,
   };
-  const remoteSongRows = await fetchAllHostedRows<RemoteLibraryRow>(() => {
-    let query = orgId
-      ? supabase.from('library_items').select('*, charts(*)').eq('org_id', orgId)
-      : supabase.from('library_items').select('*, charts(*)').eq('user_id', user.id);
-    if (checkpoint?.cursor) query = query.gt('updated_at', checkpoint.cursor);
-    return query;
-  });
   progress.emit({ phase: 'pull-songs' });
   progress.addTotal(remoteSongRows.length);
 
