@@ -13,6 +13,22 @@ export function resolveCanonicalRoot(map: Map<string, string>, id: string): stri
   return current;
 }
 
+/**
+ * Keep the duplicate that appears in setlists. Unused copies are the ones to drop.
+ * Equal setlist use (or none) keeps the oldest row.
+ */
+export function pickCanonicalDuplicate<T extends { id: string; createdAt: string }>(
+  group: readonly T[],
+  setlistUses: ReadonlyMap<string, number>,
+): T {
+  if (!group.length) throw new Error('duplicate group is empty');
+  return [...group].sort((a, b) => {
+    const byUses = (setlistUses.get(b.id) ?? 0) - (setlistUses.get(a.id) ?? 0);
+    if (byUses) return byUses;
+    return a.createdAt.localeCompare(b.createdAt);
+  })[0];
+}
+
 /** Compact dupe→canonical so every value is a final root (and drop self-maps). */
 export function compactCanonicalMap(map: Map<string, string>): Map<string, string> {
   const out = new Map<string, string>();

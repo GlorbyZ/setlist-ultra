@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Text } from '@/components/Themed';
 import { LiveChrome } from '@/src/components/LiveChrome';
+import { ActionSheet } from '@/src/components/BrandDialog';
 import { LiveSongPage } from '@/src/components/LiveSongPage';
 import { SetlistQuickAccess } from '@/src/components/SetlistQuickAccess';
 import { SongViewer, type SongViewerHandle } from '@/src/components/SongViewer';
@@ -18,6 +19,7 @@ import {
 } from '@/src/lib/liveKeyCapo';
 import { getCachedSongDocument, warmSongDocuments } from '@/src/lib/songChartCache';
 import { patchAppState } from '@/src/lib/repository';
+import { launchFlags } from '@/src/lib/launchFlags';
 import { subscribePedals } from '@/src/lib/pedals';
 import { sendMidiOnLoad } from '@/src/lib/midi';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -34,6 +36,7 @@ export default function SongScreen() {
   const [capo, setCapo] = useState(0);
   const [scrolling, setScrolling] = useState(false);
   const [setlistOpen, setSetlistOpen] = useState(false);
+  const [songMenuOpen, setSongMenuOpen] = useState(false);
   const viewerRef = useRef<SongViewerHandle>(null);
 
   const prev = index > 0 ? queue[index - 1] : null;
@@ -188,6 +191,7 @@ export default function SongScreen() {
         onCapo={(d) => changeCapo(wrapCapo(capo, d))}
         onCapoPick={(n) => changeCapo(n)}
         onEdit={() => router.push(('/editor/' + song.id) as Href)}
+        onSongMenu={() => setSongMenuOpen(true)}
         onPrev={prev ? () => go(-1) : undefined}
         onNext={next ? () => go(1) : undefined}
         onTranspose={(d) => changeKeyShift(keyShift + d)}
@@ -224,6 +228,24 @@ export default function SongScreen() {
           onSelect={(_key, songIndex) => goTo(songIndex)}
         />
       ) : null}
+
+      <ActionSheet
+        visible={songMenuOpen}
+        title={song.title}
+        onClose={() => setSongMenuOpen(false)}
+        options={[
+          { label: 'Song Settings', onPress: () => router.push(('/editor/' + song.id) as Href) },
+          ...(launchFlags.ai
+            ? [
+                {
+                  label: 'Clean Up Chart',
+                  onPress: () =>
+                    router.push(`/ai?task=fix-chart&songId=${encodeURIComponent(song.id)}` as Href),
+                },
+              ]
+            : []),
+        ]}
+      />
     </View>
   );
 }

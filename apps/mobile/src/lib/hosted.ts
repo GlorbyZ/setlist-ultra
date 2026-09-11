@@ -5,9 +5,16 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import {
   EMPTY_SYNC_PROGRESS,
+  bindHostedLibrarySong,
+  firstEmbedded,
+  indexSongsByRemoteLibraryId,
   isArrangementConflict,
+  namesLikelyMatch,
+  setlistSongSlotIsBroken,
   shouldApplyRemoteSetItems,
   shouldPushEntity,
+  shouldRelinkRemoteSetItems,
+  titlesLikelySame,
   type SyncProgressEvent,
 } from '@setlist-ultra/core';
 import { config, isHostedConfigured } from './config';
@@ -22,8 +29,10 @@ import {
   getSetlistItems,
   getSyncState,
   insertLibrarySong,
+  countBrokenSetlistSlots,
   listOrgs,
   listSetlistsForSync,
+  listSongs,
   listSongsForSync,
   newId,
   now,
@@ -115,6 +124,29 @@ function isUuid(value?: string | null): value is string {
   return Boolean(
     value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value),
   );
+}
+
+async function fetchAllHostedRows<T>(
+  queryFactory: () => any,
+  order: { column: string; ascending?: boolean }[] = [
+    { column: 'updated_at', ascending: true },
+    { column: 'id', ascending: true },
+  ],
+): Promise<T[]> {
+  const pageSize = 100;
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    let query = queryFactory();
+    for (const rule of order) {
+      query = query.order(rule.column, { ascending: rule.ascending !== false });
+    }
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw hostedError(error);
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
 }
 
 async function persistSupabaseSession(email?: string | null, accessToken?: string | null, refreshToken?: string | null) {
@@ -439,7 +471,7 @@ type RemoteLibraryRow = {
   updated_at?: string | null;
   revision?: number | null;
   extras?: Record<string, unknown> | null;
-  charts?: HostedChart | null;
+  charts?: HostedChart | HostedChart[] | null;
 };
 
 type RemoteSetRow = {
@@ -450,12 +482,188 @@ type RemoteSetRow = {
   updated_at?: string | null;
   extras?: { localId?: string; notes?: string; pinned?: number } | null;
   setlist_items?: {
+    setlist_id?: string;
     library_item_id?: string | null;
     sort_order?: number;
     key_offset?: number;
     extras?: { itemType?: string; noteContent?: string; timerSeconds?: number; overrideCapo?: number | null };
   }[];
 };
+
+type HostedSongSyncRow = Awaited<ReturnType<typeof listSongsForSync>>[number];
+
+type HostedLibraryMaps = {
+  scope: Awaited<ReturnType<typeof getLibraryScope>>;
+  libraryIdBySong: Map<string, string>;
+  songByRemoteLibraryId: Map<string, string>;
+  songsByRemoteId: Map<string, HostedSongSyncRow>;
+  unboundLocals: Map<string, HostedSongSyncRow>;
+  repair: boolean;
+  progress: ReturnType<typeof createSyncReporter>;
+};
+
+function takeUnboundLocalSong(maps: HostedLibraryMaps, item: RemoteLibraryRow): HostedSongSyncRow | null {
+  if (!maps.repair) return null;
+  for (const [localId, song] of maps.unboundLocals) {
+    if (!titlesLikelySame(song.title, item.title)) continue;
+    if (song.artist && item.artist && !namesLikelyMatch(song.artist, item.artist)) continue;
+    maps.unboundLocals.delete(localId);
+    return song;
+  }
+  return null;
+}
+
+async function ingestRemoteLibraryItem(item: RemoteLibraryRow, maps: HostedLibraryMaps) {
+  const chart = firstEmbedded(item.charts);
+  const extras = (item.extras ?? {}) as { autoscrollSeconds?: number | null; notesText?: string; tags?: string };
+  const existing = maps.songsByRemoteId.get(item.id) ?? takeUnboundLocalSong(maps, item);
+
+  if (item.deleted_at) {
+    if (existing && !shouldPushEntity(existing.syncStatus, existing.deleted)) {
+      await deleteSong(existing.id, { origin: 'sync' });
+      maps.songsByRemoteId.delete(item.id);
+    }
+    return;
+  }
+
+  if (existing) {
+    bindHostedLibrarySong(maps.libraryIdBySong, maps.songByRemoteLibraryId, existing.id, item.id);
+    maps.songsByRemoteId.set(item.id, existing);
+    const localDirty = shouldPushEntity(existing.syncStatus, existing.deleted);
+    if (chart?.chordpro && isArrangementConflict(localDirty, existing.contentHash, chart.content_hash)) {
+      const astJson = typeof chart.ast === 'string' ? chart.ast : chart.ast ? JSON.stringify(chart.ast) : undefined;
+      await insertChartRevision({
+        arrangementId: existing.id,
+        contentHash: chart.content_hash,
+        chordpro: chart.chordpro,
+        ast: astJson,
+        parentRevisionId: existing.revisionId,
+      });
+      if (existing.remoteId !== item.id) {
+        await updateSong(existing.id, { remoteId: item.id }, { origin: 'sync' });
+      }
+      maps.progress.emit({ conflicts: maps.progress.state.conflicts + 1 });
+      return;
+    }
+    await updateSong(
+      existing.id,
+      {
+        remoteId: item.id,
+        syncStatus: localDirty ? existing.syncStatus : 'synced',
+        capo: item.capo ?? existing.capo ?? 0,
+        keyShift: item.key_shift ?? existing.keyShift ?? 0,
+        durationSeconds: item.duration_seconds ?? existing.durationSeconds ?? undefined,
+        duration2: extras.autoscrollSeconds ?? existing.duration2 ?? undefined,
+        originalKey: chart?.original_key ?? existing.originalKey ?? undefined,
+        chordpro: localDirty || !chart?.chordpro ? undefined : chart.chordpro,
+        notesText: extras.notesText ?? existing.notesText ?? undefined,
+        tags: extras.tags ?? existing.tags ?? undefined,
+      },
+      { origin: 'sync' },
+    );
+    return;
+  }
+
+  if (chart?.chordpro) {
+    const astJson = typeof chart.ast === 'string' ? chart.ast : chart.ast ? JSON.stringify(chart.ast) : undefined;
+    await findOrCreateChart({
+      chordpro: chart.chordpro,
+      ast: astJson,
+      title: chart.title ?? item.title,
+      artist: chart.artist ?? item.artist,
+      originalKey: chart.original_key ?? undefined,
+      contentHash: chart.content_hash,
+      sourceProvider: chart.source_provider,
+      sourceExternalId: chart.source_external_id,
+    });
+  }
+
+  const localId = await insertLibrarySong({
+    title: item.title,
+    artist: item.artist,
+    capo: item.capo ?? 0,
+    chordpro: chart?.chordpro ?? '',
+    originalKey: chart?.original_key ?? undefined,
+    sourceProvider: chart?.source_provider,
+    sourceExternalId: chart?.source_external_id ?? undefined,
+    scope: maps.scope,
+    softDedupe: false,
+    reuseExisting: false,
+  });
+  await updateSong(
+    localId,
+    {
+      remoteId: item.id,
+      syncStatus: 'synced',
+      keyShift: item.key_shift ?? 0,
+      durationSeconds: item.duration_seconds ?? undefined,
+      duration2: extras.autoscrollSeconds ?? undefined,
+    },
+    { origin: 'sync' },
+  );
+  bindHostedLibrarySong(maps.libraryIdBySong, maps.songByRemoteLibraryId, localId, item.id);
+  maps.songsByRemoteId.set(item.id, {
+    id: localId,
+    remoteId: item.id,
+    syncStatus: 'synced',
+    deleted: 0,
+    contentHash: chart?.content_hash ?? null,
+    revisionId: null,
+    capo: item.capo ?? 0,
+    keyShift: item.key_shift ?? 0,
+    durationSeconds: item.duration_seconds ?? null,
+    duration2: extras.autoscrollSeconds ?? null,
+    originalKey: chart?.original_key ?? null,
+    notesText: extras.notesText ?? null,
+    tags: extras.tags ?? null,
+  } as HostedSongSyncRow);
+  maps.progress.emit({ pulledSongs: maps.progress.state.pulledSongs + 1 });
+}
+
+async function fetchLibraryItemsByIds(
+  supabase: NonNullable<ReturnType<typeof getHostedClient>>,
+  ids: string[],
+): Promise<RemoteLibraryRow[]> {
+  const rows: RemoteLibraryRow[] = [];
+  const chunkSize = 50;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const slice = ids.slice(i, i + chunkSize);
+    const { data, error } = await supabase.from('library_items').select('*, charts(*)').in('id', slice);
+    if (error) throw hostedError(error);
+    rows.push(...((data ?? []) as RemoteLibraryRow[]));
+  }
+  return rows;
+}
+
+async function attachRemoteSetlistItems(
+  supabase: NonNullable<ReturnType<typeof getHostedClient>>,
+  remoteSetRows: RemoteSetRow[],
+) {
+  const ids = remoteSetRows.map((row) => row.id);
+  const itemsBySet = new Map<string, NonNullable<RemoteSetRow['setlist_items']>>();
+  for (const id of ids) itemsBySet.set(id, []);
+  const chunkSize = 80;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const slice = ids.slice(i, i + chunkSize);
+    const rows = await fetchAllHostedRows<
+      NonNullable<RemoteSetRow['setlist_items']>[number] & { setlist_id: string }
+    >(
+      () => supabase.from('setlist_items').select('setlist_id, library_item_id, sort_order, key_offset, extras').in('setlist_id', slice),
+      [
+        { column: 'sort_order', ascending: true },
+        { column: 'id', ascending: true },
+      ],
+    );
+    for (const row of rows) {
+      const list = itemsBySet.get(row.setlist_id) ?? [];
+      list.push(row);
+      itemsBySet.set(row.setlist_id, list);
+    }
+  }
+  for (const remote of remoteSetRows) {
+    remote.setlist_items = itemsBySet.get(remote.id) ?? remote.setlist_items ?? [];
+  }
+}
 
 function laterCursor(current: string | null, candidate?: string | null) {
   if (!candidate) return current;
@@ -560,7 +768,15 @@ function createSyncReporter(onProgress?: (event: SyncProgressEvent) => void) {
   return { state, emit, addTotal, tick, finish };
 }
 
-export async function syncPersonalLibrary(onProgress?: (event: SyncProgressEvent) => void) {
+export type SyncPersonalLibraryOptions = {
+  /** Full catalog pull and force-relink setlists from cloud. */
+  repair?: boolean;
+};
+
+export async function syncPersonalLibrary(
+  onProgress?: (event: SyncProgressEvent) => void,
+  options?: SyncPersonalLibraryOptions,
+) {
   const progress = createSyncReporter(onProgress);
   progress.emit({ phase: 'session' });
 
@@ -573,10 +789,15 @@ export async function syncPersonalLibrary(onProgress?: (event: SyncProgressEvent
 
   const scope = await getLibraryScope();
   const workspaceId = workspaceIdForScope(scope);
+  const brokenBefore = await countBrokenSetlistSlots(scope);
+  const repair = options?.repair === true || brokenBefore.brokenSlots > 0;
   const pending = await listPendingOutbox(workspaceId);
   const localSongs = await listSongsForSync(scope);
   const localSets = await listSetlistsForSync(scope);
   const libraryIdBySong = new Map<string, string>();
+  const songByRemoteLibraryId = indexSongsByRemoteLibraryId(localSongs);
+  const songsByRemoteId = new Map<string, HostedSongSyncRow>();
+  const unboundLocals = new Map<string, HostedSongSyncRow>();
   const userId = scope.libraryKind === 'personal' ? user.id : null;
   const orgId = scope.libraryKind === 'org' ? (scope.orgId ?? null) : null;
 
@@ -589,7 +810,12 @@ export async function syncPersonalLibrary(onProgress?: (event: SyncProgressEvent
   progress.addTotal(songsToPush.length + setsToPush.length);
 
   for (const song of localSongs) {
-    if (isUuid(song.remoteId)) libraryIdBySong.set(song.id, song.remoteId);
+    if (isUuid(song.remoteId)) {
+      bindHostedLibrarySong(libraryIdBySong, songByRemoteLibraryId, song.id, song.remoteId);
+      songsByRemoteId.set(song.remoteId, song);
+    } else if (!song.deleted) {
+      unboundLocals.set(song.id, song);
+    }
     if (!shouldPushEntity(song.syncStatus, song.deleted)) continue;
 
     try {
@@ -649,7 +875,8 @@ export async function syncPersonalLibrary(onProgress?: (event: SyncProgressEvent
         revision: song.localRevision ?? 1,
         operationId,
       });
-      libraryIdBySong.set(song.id, remoteLibraryId);
+      bindHostedLibrarySong(libraryIdBySong, songByRemoteLibraryId, song.id, remoteLibraryId);
+      songsByRemoteId.set(remoteLibraryId, { ...song, remoteId: remoteLibraryId, syncStatus: 'synced' });
       await updateSong(song.id, { remoteId: remoteLibraryId, syncStatus: 'synced' }, { origin: 'sync' });
       await completeOutboxForEntity(song.id);
     } finally {
@@ -657,120 +884,46 @@ export async function syncPersonalLibrary(onProgress?: (event: SyncProgressEvent
     }
   }
 
-  const checkpoint = await getSyncCheckpoint(workspaceId);
-  let libraryQuery = orgId
-    ? supabase.from('library_items').select('*, charts(*)').eq('org_id', orgId)
-    : supabase.from('library_items').select('*, charts(*)').eq('user_id', user.id);
-  if (checkpoint?.cursor) libraryQuery = libraryQuery.gt('updated_at', checkpoint.cursor);
-
-  const { data: remoteItems, error } = await libraryQuery;
-  if (error) throw hostedError(error);
-
-  const remoteSongRows = (remoteItems ?? []) as RemoteLibraryRow[];
+  const checkpoint = repair ? null : await getSyncCheckpoint(workspaceId);
+  const libraryMaps: HostedLibraryMaps = {
+    scope,
+    libraryIdBySong,
+    songByRemoteLibraryId,
+    songsByRemoteId,
+    unboundLocals,
+    repair,
+    progress,
+  };
+  const remoteSongRows = await fetchAllHostedRows<RemoteLibraryRow>(() => {
+    let query = orgId
+      ? supabase.from('library_items').select('*, charts(*)').eq('org_id', orgId)
+      : supabase.from('library_items').select('*, charts(*)').eq('user_id', user.id);
+    if (checkpoint?.cursor) query = query.gt('updated_at', checkpoint.cursor);
+    return query;
+  });
   progress.emit({ phase: 'pull-songs' });
   progress.addTotal(remoteSongRows.length);
 
-  const refreshedSongs = await listSongsForSync(scope);
   let pullCursor = checkpoint?.cursor ?? null;
   for (const item of remoteSongRows) {
     try {
       pullCursor = laterCursor(pullCursor, item.updated_at);
-      const chart = item.charts;
-      const extras = (item.extras ?? {}) as { autoscrollSeconds?: number | null; notesText?: string; tags?: string };
-      const existing = refreshedSongs.find((s) => s.remoteId === item.id || (!item.deleted_at && s.contentHash && s.contentHash === chart?.content_hash));
-
-      if (item.deleted_at) {
-        if (existing && !shouldPushEntity(existing.syncStatus, existing.deleted)) {
-          await deleteSong(existing.id, { origin: 'sync' });
-        }
-        continue;
-      }
-      if (!chart?.chordpro) continue;
-
-      const astJson = typeof chart.ast === 'string' ? chart.ast : chart.ast ? JSON.stringify(chart.ast) : undefined;
-      await findOrCreateChart({
-        chordpro: chart.chordpro,
-        ast: astJson,
-        title: chart.title ?? item.title,
-        artist: chart.artist ?? item.artist,
-        originalKey: chart.original_key ?? undefined,
-        contentHash: chart.content_hash,
-        sourceProvider: chart.source_provider,
-        sourceExternalId: chart.source_external_id,
-      });
-
-      if (existing) {
-        libraryIdBySong.set(existing.id, item.id);
-        const localDirty = shouldPushEntity(existing.syncStatus, existing.deleted);
-        if (isArrangementConflict(localDirty, existing.contentHash, chart.content_hash)) {
-          await insertChartRevision({
-            arrangementId: existing.id,
-            contentHash: chart.content_hash,
-            chordpro: chart.chordpro,
-            ast: astJson,
-            parentRevisionId: existing.revisionId,
-          });
-          if (existing.remoteId !== item.id) {
-            await updateSong(existing.id, { remoteId: item.id }, { origin: 'sync' });
-          }
-          progress.emit({ conflicts: progress.state.conflicts + 1 });
-          continue;
-        }
-        await updateSong(
-          existing.id,
-          {
-            remoteId: item.id,
-            syncStatus: localDirty ? existing.syncStatus : 'synced',
-            capo: item.capo ?? existing.capo ?? 0,
-            keyShift: item.key_shift ?? existing.keyShift ?? 0,
-            durationSeconds: item.duration_seconds ?? existing.durationSeconds ?? undefined,
-            duration2: extras.autoscrollSeconds ?? existing.duration2 ?? undefined,
-            originalKey: chart.original_key ?? existing.originalKey ?? undefined,
-            chordpro: localDirty ? undefined : chart.chordpro,
-            notesText: extras.notesText ?? existing.notesText ?? undefined,
-            tags: extras.tags ?? existing.tags ?? undefined,
-          },
-          { origin: 'sync' },
-        );
-        continue;
-      }
-
-      const localId = await insertLibrarySong({
-        title: item.title,
-        artist: item.artist,
-        capo: item.capo ?? 0,
-        chordpro: chart.chordpro,
-        originalKey: chart.original_key ?? undefined,
-        sourceProvider: chart.source_provider,
-        sourceExternalId: chart.source_external_id ?? undefined,
-        scope,
-        softDedupe: false,
-      });
-      await updateSong(
-        localId,
-        {
-          remoteId: item.id,
-          syncStatus: 'synced',
-          keyShift: item.key_shift ?? 0,
-          durationSeconds: item.duration_seconds ?? undefined,
-          duration2: extras.autoscrollSeconds ?? undefined,
-        },
-        { origin: 'sync' },
-      );
-      libraryIdBySong.set(localId, item.id);
-      progress.emit({ pulledSongs: progress.state.pulledSongs + 1 });
+      await ingestRemoteLibraryItem(item, libraryMaps);
     } finally {
       progress.tick({ phase: 'pull-songs' });
     }
   }
+
+  indexSongsByRemoteLibraryId(await listSongsForSync(scope), songByRemoteLibraryId);
 
   await syncSetlists(supabase, {
     userId: user.id,
     scope,
     orgId,
     libraryIdBySong,
+    songByRemoteLibraryId,
+    libraryMaps,
     pending,
-    checkpointCursor: checkpoint?.cursor ?? null,
     progress,
     onCursor: (value) => {
       pullCursor = laterCursor(pullCursor, value);
@@ -784,6 +937,8 @@ export async function syncPersonalLibrary(onProgress?: (event: SyncProgressEvent
   });
   await touchLastSync();
   progress.finish();
+  const brokenAfter = await countBrokenSetlistSlots(scope);
+  return { repair, ...brokenBefore, brokenSlotsAfter: brokenAfter.brokenSlots, brokenSetsAfter: brokenAfter.brokenSets };
 }
 
 async function syncSetlists(
@@ -793,8 +948,9 @@ async function syncSetlists(
     scope: Awaited<ReturnType<typeof getLibraryScope>>;
     orgId: string | null;
     libraryIdBySong: Map<string, string>;
+    songByRemoteLibraryId: Map<string, string>;
+    libraryMaps: HostedLibraryMaps;
     pending: { id: string; entityId: string }[];
-    checkpointCursor: string | null;
     progress: ReturnType<typeof createSyncReporter>;
     onCursor: (value?: string | null) => void;
   },
@@ -870,34 +1026,38 @@ async function syncSetlists(
     }
 
     const items = await getSetlistItems(set.id);
-    const rows = items.map((item, index) => {
-      const libraryItemId = item.songId ? input.libraryIdBySong.get(item.songId) ?? null : null;
-      return {
-        library_item_id: isUuid(libraryItemId) ? libraryItemId : null,
-        sort_order: item.sortOrder ?? index,
-        key_offset: item.keyOffset ?? 0,
-        extras: {
-          itemType: item.itemType,
-          noteContent: item.noteContent,
-          timerSeconds: item.timerSeconds,
-          overrideCapo: item.overrideCapo,
-          localId: item.id,
-        },
-      };
-    });
-    const { error: replaceError } = await supabase.rpc('replace_setlist_items', {
-      p_setlist_id: remoteSetId,
-      p_items: rows,
-    });
-    if (replaceError) {
-      if (createdThisSync) {
-        await supabase.from('setlists').delete().eq('id', remoteSetId);
-        await db
-          .update(setlists)
-          .set({ remoteId: null, syncStatus: 'local', updatedAt: now() })
-          .where(eq(setlists.id, set.id));
+    const liveSongIds = new Set((await listSongs(input.scope)).map((row) => row.id));
+    const hasBrokenSongs = items.some((item) => setlistSongSlotIsBroken(item, liveSongIds));
+    if (!hasBrokenSongs) {
+      const rows = items.map((item, index) => {
+        const libraryItemId = item.songId ? input.libraryIdBySong.get(item.songId) ?? null : null;
+        return {
+          library_item_id: isUuid(libraryItemId) ? libraryItemId : null,
+          sort_order: item.sortOrder ?? index,
+          key_offset: item.keyOffset ?? 0,
+          extras: {
+            itemType: item.itemType,
+            noteContent: item.noteContent,
+            timerSeconds: item.timerSeconds,
+            overrideCapo: item.overrideCapo,
+            localId: item.id,
+          },
+        };
+      });
+      const { error: replaceError } = await supabase.rpc('replace_setlist_items', {
+        p_setlist_id: remoteSetId,
+        p_items: rows,
+      });
+      if (replaceError) {
+        if (createdThisSync) {
+          await supabase.from('setlists').delete().eq('id', remoteSetId);
+          await db
+            .update(setlists)
+            .set({ remoteId: null, syncStatus: 'local', updatedAt: now() })
+            .where(eq(setlists.id, set.id));
+        }
+        throw hostedError(replaceError);
       }
-      throw hostedError(replaceError);
     }
     await db
       .update(setlists)
@@ -909,19 +1069,31 @@ async function syncSetlists(
     }
   }
 
-  let remoteSetsQuery = input.orgId
-    ? supabase.from('setlists').select('*, setlist_items(*)').eq('org_id', input.orgId)
-    : supabase.from('setlists').select('*, setlist_items(*)').eq('user_id', input.userId);
-  if (input.checkpointCursor) remoteSetsQuery = remoteSetsQuery.gt('updated_at', input.checkpointCursor);
-  const { data: remoteSets, error } = await remoteSetsQuery;
-  if (error) throw hostedError(error);
-
-  const remoteSetRows = (remoteSets ?? []) as RemoteSetRow[];
+  const remoteSetRows = await fetchAllHostedRows<RemoteSetRow>(() =>
+    input.orgId
+      ? supabase.from('setlists').select('*').eq('org_id', input.orgId)
+      : supabase.from('setlists').select('*').eq('user_id', input.userId),
+  );
+  await attachRemoteSetlistItems(supabase, remoteSetRows);
   input.progress.emit({ phase: 'pull-sets' });
   input.progress.addTotal(remoteSetRows.length);
 
-  const songByRemoteLibraryId = new Map<string, string>();
-  for (const [localId, remoteId] of input.libraryIdBySong) songByRemoteLibraryId.set(remoteId, localId);
+  const neededLibraryIds = new Set<string>();
+  for (const remote of remoteSetRows) {
+    for (const item of remote.setlist_items ?? []) {
+      if (item.library_item_id && !input.songByRemoteLibraryId.has(item.library_item_id)) {
+        neededLibraryIds.add(item.library_item_id);
+      }
+    }
+  }
+  if (neededLibraryIds.size) {
+    const missing = await fetchLibraryItemsByIds(supabase, [...neededLibraryIds]);
+    for (const item of missing) {
+      await ingestRemoteLibraryItem(item, input.libraryMaps);
+    }
+  }
+  indexSongsByRemoteLibraryId(await listSongsForSync(input.scope), input.songByRemoteLibraryId);
+  const liveSongIds = new Set((await listSongs(input.scope)).map((row) => row.id));
 
   const refreshed = await listSetlistsForSync(input.scope);
   for (const remote of remoteSetRows) {
@@ -973,22 +1145,30 @@ async function syncSetlists(
         await db.update(setlists).set({ remoteId: remote.id, updatedAt: now() }).where(eq(setlists.id, localSetId));
       }
 
-      const applyItems = !existing || shouldApplyRemoteSetItems(existing.syncStatus);
-      if (!applyItems || !localSetId) continue;
-
+      const localItems = existing ? await getSetlistItems(existing.id) : [];
+      const applyItems =
+        !existing ||
+        shouldRelinkRemoteSetItems({
+          localSyncStatus: existing.syncStatus,
+          hasUnlinkedSongItems: localItems.some((item) => setlistSongSlotIsBroken(item, liveSongIds)),
+        });
       const remoteItems = remote.setlist_items ?? [];
+      if (!applyItems || !localSetId) continue;
+      if (!remoteItems.length && localItems.length) continue;
       await db.update(setlistItems).set({ deleted: 1 }).where(eq(setlistItems.setlistId, localSetId));
       for (const [index, item] of remoteItems.entries()) {
+        const libraryItemId = item.library_item_id ?? null;
         await db.insert(setlistItems).values({
           id: newId(),
           setlistId: localSetId,
           sortOrder: item.sort_order ?? index,
           itemType: item.extras?.itemType === 'note' ? 'note' : item.extras?.itemType === 'timer' ? 'timer' : 'song',
-          songId: item.library_item_id ? songByRemoteLibraryId.get(item.library_item_id) ?? null : null,
+          songId: libraryItemId ? input.songByRemoteLibraryId.get(libraryItemId) ?? null : null,
           noteContent: item.extras?.noteContent ?? null,
           timerSeconds: item.extras?.timerSeconds ?? null,
           keyOffset: item.key_offset ?? 0,
           overrideCapo: item.extras?.overrideCapo ?? null,
+          extras: libraryItemId ? JSON.stringify({ libraryItemId }) : null,
         });
       }
       if (created) input.progress.emit({ pulledSets: input.progress.state.pulledSets + 1 });

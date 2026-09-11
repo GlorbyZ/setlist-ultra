@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { classifyProviderMessage, redactSecrets, userFacingAiError, AiError } from './errors';
+import { classifyProviderMessage, redactSecrets, userFacingAiError, userFacingAssistError, AiError } from './errors';
+import { stripInternalPayload, songDisplayName } from './present';
+import { AI_ACTION_CARDS, composeTaskUserText, primaryTaskAction } from './prompts';
 import { wrapProposal, hashProposalBody, isProposalExpired, setUndoStillSafe } from './proposal';
 import { estimateSetDuration, isFavoriteSong, searchLibrary } from './search';
 import { assertNotOnStage, isLiveSessionActive, setLiveSessionActive } from './stageGuard';
@@ -134,4 +136,34 @@ test('library answers drop invented ids', () => {
 test('retrieveForTask prefers search hits over the full dump', () => {
   const hits = retrieveForTask('build-set', library, 'Creep');
   assert.equal(hits[0]?.id, 's-creep');
+});
+
+test('assist cards open setup and do not mention internal ids', () => {
+  for (const card of AI_ACTION_CARDS) {
+    assert.equal(card.action, 'Set up');
+    assert.equal(/id/i.test(card.subtitle), false);
+  }
+  assert.equal(primaryTaskAction('build-set'), 'Create draft');
+  assert.equal(primaryTaskAction('fix-chart'), 'Analyze chart');
+});
+
+test('composeTaskUserText stays off the visible transcript contract', () => {
+  const text = composeTaskUserText('build-set', { setName: 'Friday gig', songCount: '10', source: 'favorites' });
+  assert.match(text, /Friday gig/);
+  assert.match(text, /favorite/i);
+});
+
+test('stripInternalPayload hides JSON and escaped payloads', () => {
+  const raw =
+    'Draft ready\\n```json\n{"type":"set-proposal","title":"X","songIds":["s-secret"]}\n```';
+  const clean = stripInternalPayload(raw);
+  assert.equal(clean.includes('s-secret'), false);
+  assert.equal(clean.includes('"type"'), false);
+  assert.equal(songDisplayName({ title: 'Wonderwall', artist: 'Oasis' }), 'Wonderwall — Oasis');
+});
+
+test('hosted assist errors stay recoverable and never echo keys', () => {
+  const msg = userFacingAssistError(new Error('Invalid API key AIzaSySecretValue123456'), true);
+  assert.equal(msg, 'Assistant is temporarily busy.');
+  assert.equal(msg.includes('AIza'), false);
 });

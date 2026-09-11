@@ -146,7 +146,7 @@ export default function EditorScreen() {
           <Pressable
             style={styles.ghost}
             onPress={() => router.push(`/ai?task=fix-chart&songId=${encodeURIComponent(id)}` as Href)}>
-            <Text style={styles.ghostText}>Clean up</Text>
+            <Text style={styles.ghostText}>Clean up chart</Text>
           </Pressable>
         ) : null}
       </View>

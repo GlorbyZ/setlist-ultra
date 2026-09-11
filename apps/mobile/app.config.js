@@ -19,6 +19,8 @@ module.exports = ({ config }) => {
       googleWebClientId: fromEnv('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', extra.googleWebClientId),
       googleAndroidClientId: fromEnv('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID', extra.googleAndroidClientId),
       ugProxyUrl: fromEnv('EXPO_PUBLIC_UG_PROXY_URL', extra.ugProxyUrl),
+      aiGatewayUrl: fromEnv('EXPO_PUBLIC_AI_GATEWAY_URL', extra.aiGatewayUrl),
+      aiGatewayToken: fromEnv('EXPO_PUBLIC_AI_GATEWAY_TOKEN', extra.aiGatewayToken),
       supabaseUrl: fromEnv('EXPO_PUBLIC_SUPABASE_URL', extra.supabaseUrl),
       supabaseAnonKey: fromEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY', extra.supabaseAnonKey),
       managerUrl: fromEnv('EXPO_PUBLIC_MANAGER_URL', extra.managerUrl),

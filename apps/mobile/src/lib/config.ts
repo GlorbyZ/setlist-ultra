@@ -24,10 +24,19 @@ function resolveManagerUrl() {
   return value.replace(/\/$/, '');
 }
 
+function resolveAiGatewayUrl() {
+  const value = fromEnv('EXPO_PUBLIC_AI_GATEWAY_URL') || extra('aiGatewayUrl');
+  if (!isUsableHttpUrl(value)) return '';
+  if (typeof __DEV__ !== 'undefined' && !__DEV__ && !isPublicServiceUrl(value)) return '';
+  return value.replace(/\/$/, '');
+}
+
 export const config = {
   googleWebClientId: fromEnv('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID') || extra('googleWebClientId'),
   googleAndroidClientId: fromEnv('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID') || extra('googleAndroidClientId'),
   ugProxyUrl: resolveUgProxyUrl(),
+  aiGatewayUrl: resolveAiGatewayUrl(),
+  aiGatewayToken: fromEnv('EXPO_PUBLIC_AI_GATEWAY_TOKEN') || extra('aiGatewayToken'),
   supabaseUrl: fromEnv('EXPO_PUBLIC_SUPABASE_URL') || extra('supabaseUrl'),
   supabaseAnonKey: fromEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY') || extra('supabaseAnonKey'),
   managerUrl: resolveManagerUrl(),
@@ -42,6 +51,10 @@ export function isHostedConfigured(): boolean {
 
 export function isCatalogConfigured(): boolean {
   return isPublicServiceUrl(config.ugProxyUrl);
+}
+
+export function isAiGatewayConfigured(): boolean {
+  return isPublicServiceUrl(config.aiGatewayUrl);
 }
 
 export function isManagerConfigured(): boolean {

@@ -9,7 +9,9 @@ export type AiActionCard = {
   id: AiActionId;
   title: string;
   subtitle: string;
-  /** Seeded into the composer when tapped. */
+  action: string;
+  icon: 'list-outline' | 'construct-outline' | 'document-text-outline' | 'search-outline';
+  /** Internal model seed. Never shown as a user chat bubble. */
   starter: string;
 };
 
@@ -17,28 +19,103 @@ export const AI_ACTION_CARDS: readonly AiActionCard[] = [
   {
     id: 'build-set',
     title: 'Build a set',
-    subtitle: 'Draft from your library, then Apply',
-    starter: 'Build a 10-song set from my library. Prefer variety and good flow.',
+    subtitle: 'Choose songs that fit your gig.',
+    action: 'Set up',
+    icon: 'list-outline',
+    starter: 'Build a set from my library. Prefer variety and good flow.',
   },
   {
     id: 'fix-chart',
-    title: 'Clean up',
-    subtitle: 'Structure ChordPro without inventing lyrics',
+    title: 'Clean up a chart',
+    subtitle: 'Fix formatting. Keep your lyrics.',
+    action: 'Set up',
+    icon: 'construct-outline',
     starter: 'Clean this chart without rewriting my lyrics. Fix directives and section labels.',
   },
   {
     id: 'clean-import',
     title: 'From text',
-    subtitle: 'Turn pasted lyrics into ChordPro',
-    starter: 'Turn this pasted text into ChordPro. Preserve the lyrics. Ask me to paste if missing.',
+    subtitle: 'Turn your text into a song draft.',
+    action: 'Set up',
+    icon: 'document-text-outline',
+    starter: 'Turn this pasted text into ChordPro. Preserve the lyrics.',
   },
   {
     id: 'ask-library',
-    title: 'What do I have?',
-    subtitle: 'Grounded answers with library ids',
-    starter: 'What do I have that would work as an acoustic opener? Cite song ids from the catalog.',
+    title: 'Explore your library',
+    subtitle: 'Find songs and useful combinations.',
+    action: 'Set up',
+    icon: 'search-outline',
+    starter: 'Find songs in my library that match this request. Cite catalog titles, not invented facts.',
   },
 ] as const;
+
+export type AssistTaskFields = {
+  setName?: string;
+  songCount?: string;
+  source?: 'library' | 'favorites';
+  occasion?: string;
+  leaveAlone?: string;
+  paste?: string;
+  title?: string;
+  artist?: string;
+  hasChords?: boolean;
+  query?: string;
+  refine?: string;
+};
+
+export function primaryTaskAction(task: AiActionId): string {
+  switch (task) {
+    case 'build-set':
+      return 'Create draft';
+    case 'fix-chart':
+      return 'Analyze chart';
+    case 'clean-import':
+      return 'Create preview';
+    case 'ask-library':
+      return 'Search library';
+  }
+}
+
+/** Model-facing prompt built from the workspace form. Not a visible user bubble. */
+export function composeTaskUserText(task: AiActionId, fields: AssistTaskFields): string {
+  const refine = fields.refine?.trim();
+  switch (task) {
+    case 'build-set':
+      return [
+        `Build a set named "${fields.setName?.trim() || 'Untitled set'}".`,
+        `About ${fields.songCount?.trim() || '8'} songs.`,
+        fields.source === 'favorites' ? 'Prefer songs tagged favorite when they fit.' : 'Use the whole library.',
+        fields.occasion?.trim() ? `Occasion or energy: ${fields.occasion.trim()}` : '',
+        refine ? `Additional direction: ${refine}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    case 'fix-chart':
+      return [
+        'Clean this chart. Preserve lyric wording. Fix malformed directives, section labels, and spacing.',
+        fields.leaveAlone?.trim() ? `Leave this alone: ${fields.leaveAlone.trim()}` : '',
+        refine ? `Additional direction: ${refine}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    case 'clean-import':
+      return [
+        'Turn this text into ChordPro. Preserve the lyrics. Do not invent missing verses.',
+        fields.title?.trim() ? `Title: ${fields.title.trim()}` : '',
+        fields.artist?.trim() ? `Artist: ${fields.artist.trim()}` : '',
+        fields.hasChords ? 'The text already contains chords.' : 'Chords may be missing; do not invent a verified progression.',
+        fields.paste?.trim() || '',
+        refine ? `Additional direction: ${refine}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    case 'ask-library':
+      return [fields.query?.trim() || 'What do I have that would work as an acoustic opener?', refine ? `Additional direction: ${refine}` : '']
+        .filter(Boolean)
+        .join('\n');
+  }
+}
 
 export type LibraryContextStub = {
   songCount: number;

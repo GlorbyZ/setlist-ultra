@@ -90,7 +90,7 @@ export default function SetsScreen() {
         <Pressable
           style={styles.aiRow}
           onPress={() => router.push('/ai?task=build-set' as Href)}>
-          <Text style={styles.aiRowText}>Build with AI</Text>
+          <Text style={styles.aiRowText}>Build with Assist</Text>
         </Pressable>
       ) : null}
 

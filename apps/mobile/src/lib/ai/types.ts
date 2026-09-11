@@ -53,6 +53,8 @@ export type ChatCompletionRequest = {
   allowModelFallback?: boolean;
   /** Reject MAX_TOKENS / truncated completions. */
   requireComplete?: boolean;
+  /** Explicit BYOK instead of the hosted gateway. Never silent. */
+  preferByok?: boolean;
 };
 
 export type ChatFinishReason = 'stop' | 'max_tokens' | 'safety' | 'other';
@@ -64,6 +66,7 @@ export type ChatCompletionResult = {
   usedFallback?: boolean;
   finishReason?: ChatFinishReason;
   truncated?: boolean;
+  hosted?: boolean;
 };
 
 export type AiChatClient = {

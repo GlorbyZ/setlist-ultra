@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import {
   compactCanonicalMap,
+  pickCanonicalDuplicate,
   createEmptyDocument,
   documentToChordPro,
   fingerprintContent,
@@ -16,6 +17,7 @@ import {
   assertIdsBelongToSet,
   sbpKeyToName,
   setlistCloneSignature,
+  setlistSongSlotIsBroken,
   shouldReuseArrangement,
   titlesLikelySame,
   transposeDocument,
@@ -175,12 +177,26 @@ export async function findSongByTitleArtist(
   );
 }
 
+async function songSetlistUseCounts(scope: LibraryScope) {
+  const lists = await listSetlists(scope);
+  const counts = new Map<string, number>();
+  for (const list of lists) {
+    const items = await getSetlistItems(list.id);
+    for (const item of items) {
+      if (!item.songId) continue;
+      counts.set(item.songId, (counts.get(item.songId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 /** Merge exact-content duplicate library songs only. Distinct arrangements are kept. */
 export async function cleanDuplicateSongs(scope?: LibraryScope) {
   const s = scope ?? (await getLibraryScope());
   const rows = await listSongs(s);
   const db = await getDatabase();
   const dupeToCanonical = new Map<string, string>();
+  const setlistUses = await songSetlistUseCounts(s);
 
   const byHash = new Map<string, SongRow[]>();
   for (const row of rows) {
@@ -192,20 +208,27 @@ export async function cleanDuplicateSongs(scope?: LibraryScope) {
   }
   for (const group of byHash.values()) {
     if (group.length < 2) continue;
-    const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    const canonical = sorted[0];
-    for (const dupe of sorted.slice(1)) dupeToCanonical.set(dupe.id, canonical.id);
+    const canonical = pickCanonicalDuplicate(group, setlistUses);
+    for (const dupe of group) {
+      if (dupe.id !== canonical.id) dupeToCanonical.set(dupe.id, canonical.id);
+    }
   }
 
   const compact = compactCanonicalMap(dupeToCanonical);
-  let removed = 0;
+  const affectedSetIds = new Set<string>();
   for (const [dupeId, canonicalId] of compact) {
     if (dupeId === canonicalId) continue;
+    const pointing = await db
+      .select({ setlistId: setlistItems.setlistId })
+      .from(setlistItems)
+      .where(and(eq(setlistItems.songId, dupeId), eq(setlistItems.deleted, 0)));
+    for (const row of pointing) affectedSetIds.add(row.setlistId);
     await db.update(setlistItems).set({ songId: canonicalId }).where(eq(setlistItems.songId, dupeId));
-    await db.update(songs).set({ deleted: 1, updatedAt: now() }).where(eq(songs.id, dupeId));
-    removed += 1;
   }
-  return { mergedGroups: compact.size ? new Set(compact.values()).size : 0, removed };
+  for (const setId of affectedSetIds) await touchSetlist(setId, 'setlist.item.upsert');
+  const toDelete = [...compact.keys()].filter((dupeId) => dupeId !== compact.get(dupeId));
+  await deleteSongs(toDelete);
+  return { mergedGroups: compact.size ? new Set(compact.values()).size : 0, removed: toDelete.length };
 }
 
 export async function listSongs(scope?: LibraryScope) {
@@ -385,6 +408,8 @@ export async function insertLibrarySong(input: {
   scope?: LibraryScope;
   /** Soft title+artist reuse. Off unless callers opt in. Hard hash / source-id always reuse. */
   softDedupe?: boolean;
+  /** When false, always insert a new song row (hosted pull). Default true. */
+  reuseExisting?: boolean;
 }): Promise<string> {
   return (await insertLibrarySongResult(input)).id;
 }
@@ -413,6 +438,8 @@ export async function insertLibrarySongResult(input: {
   softDedupe?: boolean;
   allocateLocalSbpId?: boolean;
   importJobId?: string | null;
+  /** When false, always insert a new song row (hosted pull). Default true. */
+  reuseExisting?: boolean;
 }): Promise<{ id: string; outcome: InsertSongOutcome }> {
   const db = await getDatabase();
   const scope = input.scope ?? (await getLibraryScope());
@@ -425,14 +452,6 @@ export async function insertLibrarySongResult(input: {
   const contentHash = input.sbp?.hash || rawHash;
   const artist = input.artist ?? input.sbp?.author ?? '';
   const variant = input.subtitle ?? input.sbp?.vName ?? input.sbp?.subTitle ?? null;
-
-  const hard = await findSongByContentHash(
-    [contentHash, rawHash, normalizedHash],
-    scope,
-    input.importJobId,
-  );
-  if (hard) return { id: hard.id, outcome: 'reused' };
-
   const sourceProvider =
     input.sourceProvider ??
     (input.sbp?.importSource?.includes('ultimate-guitar')
@@ -442,37 +461,48 @@ export async function insertLibrarySongResult(input: {
         : null);
   const sourceExternalId =
     input.sourceExternalId ?? (typeof input.sbp?.Url === 'string' ? input.sbp.Url : null);
-  if (sourceProvider && sourceExternalId) {
-    const bySource = await findSongBySourceId(sourceProvider, sourceExternalId, scope, input.importJobId);
-    if (bySource) return { id: bySource.id, outcome: 'reused' };
-  }
 
-  const dbSongs = await db.select().from(songs).where(scopeFilter(scope, input.importJobId));
-  if (!chartBodyIsEmpty(input.chordpro)) {
-    const byNormalized = dbSongs.find(
-      (row) => row.chordpro && fingerprintNormalizedChart(row.chordpro) === normalizedHash,
+  const reuseExisting = input.reuseExisting !== false;
+  if (reuseExisting) {
+    const hard = await findSongByContentHash(
+      [contentHash, rawHash, normalizedHash],
+      scope,
+      input.importJobId,
     );
-    if (byNormalized) return { id: byNormalized.id, outcome: 'reused' };
-  }
+    if (hard) return { id: hard.id, outcome: 'reused' };
 
-  const byWork = dbSongs.find((row) =>
-    shouldReuseArrangement({
-      incomingTitle: input.title,
-      incomingArtist: artist,
-      incomingVariant: variant,
-      incomingChordpro: input.chordpro,
-      existingTitle: row.title,
-      existingArtist: row.artist,
-      existingVariant: row.subtitle ?? row.vName,
-      existingChordpro: row.chordpro ?? '',
-    }),
-  );
-  if (byWork) return { id: byWork.id, outcome: 'reused' };
+    if (sourceProvider && sourceExternalId) {
+      const bySource = await findSongBySourceId(sourceProvider, sourceExternalId, scope, input.importJobId);
+      if (bySource) return { id: bySource.id, outcome: 'reused' };
+    }
 
-  // Soft match remains available for callers that opt in (already covered by shouldReuseArrangement).
-  if (input.softDedupe === true) {
-    const soft = await findSongByTitleArtist(input.title, artist, scope, input.importJobId);
-    if (soft) return { id: soft.id, outcome: 'reused' };
+    const dbSongs = await db.select().from(songs).where(scopeFilter(scope, input.importJobId));
+    if (!chartBodyIsEmpty(input.chordpro)) {
+      const byNormalized = dbSongs.find(
+        (row) => row.chordpro && fingerprintNormalizedChart(row.chordpro) === normalizedHash,
+      );
+      if (byNormalized) return { id: byNormalized.id, outcome: 'reused' };
+    }
+
+    const byWork = dbSongs.find((row) =>
+      shouldReuseArrangement({
+        incomingTitle: input.title,
+        incomingArtist: artist,
+        incomingVariant: variant,
+        incomingChordpro: input.chordpro,
+        existingTitle: row.title,
+        existingArtist: row.artist,
+        existingVariant: row.subtitle ?? row.vName,
+        existingChordpro: row.chordpro ?? '',
+      }),
+    );
+    if (byWork) return { id: byWork.id, outcome: 'reused' };
+
+    // Soft match remains available for callers that opt in (already covered by shouldReuseArrangement).
+    if (input.softDedupe === true) {
+      const soft = await findSongByTitleArtist(input.title, artist, scope, input.importJobId);
+      if (soft) return { id: soft.id, outcome: 'reused' };
+    }
   }
 
   const chartId = await findOrCreateChart({
@@ -774,6 +804,22 @@ export async function getSetlistItems(setlistId: string) {
     .from(setlistItems)
     .where(and(eq(setlistItems.setlistId, setlistId), eq(setlistItems.deleted, 0)))
     .orderBy(setlistItems.sortOrder);
+}
+
+export async function countBrokenSetlistSlots(scope?: LibraryScope) {
+  const s = scope ?? (await getLibraryScope());
+  const liveIds = new Set((await listSongs(s)).map((row) => row.id));
+  const lists = await listSetlists(s);
+  let brokenSlots = 0;
+  let brokenSets = 0;
+  for (const list of lists) {
+    const items = await getSetlistItems(list.id);
+    const broken = items.filter((item) => setlistSongSlotIsBroken(item, liveIds)).length;
+    if (!broken) continue;
+    brokenSlots += broken;
+    brokenSets += 1;
+  }
+  return { brokenSlots, brokenSets };
 }
 
 async function getSetlistItem(id: string) {

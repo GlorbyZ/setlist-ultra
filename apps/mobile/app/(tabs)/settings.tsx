@@ -22,6 +22,7 @@ import {
   hostedSignUp,
   isGoogleAuthConfigured,
   syncPersonalLibrary,
+  type SyncPersonalLibraryOptions,
 } from '@/src/lib/hosted';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
 
@@ -83,7 +84,7 @@ export default function SettingsScreen() {
     setSyncUi((current) => ({ ...current, visible: false, error: null, finished: false }));
   };
 
-  const syncLibrary = async (headline: string) => {
+  const syncLibrary = async (headline: string, options?: SyncPersonalLibraryOptions) => {
     setSyncUi({
       visible: true,
       headline,
@@ -92,12 +93,28 @@ export default function SettingsScreen() {
       finished: false,
     });
     try {
-      await syncPersonalLibrary((event) => {
-        setSyncUi((current) => ({ ...current, progress: event, headline: 'Syncing library' }));
-      });
+      const result = await syncPersonalLibrary((event) => {
+        setSyncUi((current) => ({ ...current, progress: event, headline }));
+      }, options);
       await refresh();
-      setStatus('Catalog + library synced');
-      setSyncUi((current) => ({ ...current, finished: true, headline: 'Syncing library' }));
+      const repaired = result.brokenSlots > result.brokenSlotsAfter;
+      setStatus(
+        repaired
+          ? `Relinked setlists: ${result.brokenSlots} missing → ${result.brokenSlotsAfter}`
+          : 'Catalog + library synced',
+      );
+      setSyncUi((current) => ({ ...current, finished: true, headline }));
+      if (options?.repair) {
+        setDialog({
+          title: 'Setlists repaired',
+          body:
+            result.brokenSlotsAfter === 0
+              ? result.brokenSlots
+                ? `Relinked ${result.brokenSlots} setlist slot(s) from your cloud catalog.`
+                : 'Cloud setlists already matched this device.'
+              : `${result.brokenSlotsAfter} slot(s) still have no matching song. ${result.brokenSets} setlist(s) need a song added back.`,
+        });
+      }
     } catch (error) {
       setSyncUi((current) => ({
         ...current,
@@ -111,8 +128,11 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {launchFlags.ai ? (
         <>
-          <Text style={styles.heading}>AI</Text>
-          <Text style={styles.body}>Bring your own API key (Gemini default). Keys stay in SecureStore on this device.</Text>
+          <Text style={styles.heading}>Assistant</Text>
+          <Text style={styles.body}>
+            Setlist Ultra can host the assistant for you. Bring-your-own-key remains available as an explicit
+            fallback in the panel below.
+          </Text>
           <AiSettingsPanel compact />
         </>
       ) : null}
@@ -264,6 +284,23 @@ export default function SettingsScreen() {
               })
             }
           />
+          {sessionEmail ? (
+            <>
+              <Text style={styles.body}>
+                If setlists show Missing from library after a restore, rebuild the joins from your cloud catalog.
+              </Text>
+              <Pressable
+                style={styles.secondary}
+                disabled={busy}
+                onPress={() =>
+                  void run(async () => {
+                    await syncLibrary('Repairing setlists', { repair: true });
+                  })
+                }>
+                <Text style={styles.secondaryText}>Repair setlists from cloud</Text>
+              </Pressable>
+            </>
+          ) : null}
         </>
       ) : (
         <View style={styles.card}>
@@ -273,7 +310,9 @@ export default function SettingsScreen() {
       )}
 
       <Text style={styles.heading}>Library</Text>
-      <Text style={styles.body}>Exact-content duplicate songs only. Different arrangements stay in the library.</Text>
+      <Text style={styles.body}>
+        Exact-content duplicates only. Keeps the copy that's in a setlist and removes extras. Different arrangements stay.
+      </Text>
       <Pressable
         style={styles.secondary}
         disabled={busy}

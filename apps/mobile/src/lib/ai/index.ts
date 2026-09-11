@@ -10,6 +10,14 @@ export * from './search';
 export * from './proposal';
 export * from './stageGuard';
 export { chatComplete, getChatClient } from './providers';
+export { shouldUseHostedGateway } from './hosted';
+export {
+  primaryActionLabel,
+  reviewLines,
+  reviewTitle,
+  songDisplayName,
+  stripInternalPayload,
+} from './present';
 export {
   applyApprovedProposal,
   applyChartPatch,

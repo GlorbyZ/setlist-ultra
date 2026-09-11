@@ -1,8 +1,11 @@
 import * as SecureStore from 'expo-secure-store';
 
+import { isAiGatewayConfigured } from '@/src/lib/config';
+
 import { AI_PROVIDERS, type AiProviderId } from './types';
 
 const PROVIDER_KEY = 'setlist-ultra.ai.provider';
+const PREFER_BYOK_KEY = 'setlist-ultra.ai.preferByok';
 const keyStoreKey = (provider: AiProviderId) => `setlist-ultra.ai.key.${provider}`;
 
 export function isAiProviderId(value: unknown): value is AiProviderId {
@@ -53,6 +56,30 @@ export async function hasAiApiKey(provider?: AiProviderId): Promise<boolean> {
   const id = provider ?? (await getAiProvider());
   const key = await getAiApiKey(id);
   return Boolean(key);
+}
+
+export async function getPreferByok(): Promise<boolean> {
+  try {
+    const raw = await SecureStore.getItemAsync(PREFER_BYOK_KEY);
+    return raw === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function setPreferByok(value: boolean): Promise<void> {
+  try {
+    if (value) await SecureStore.setItemAsync(PREFER_BYOK_KEY, '1');
+    else await SecureStore.deleteItemAsync(PREFER_BYOK_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Hosted gateway, or an explicit BYOK key. */
+export async function hasAiAccess(provider?: AiProviderId): Promise<boolean> {
+  if (isAiGatewayConfigured() && !(await getPreferByok())) return true;
+  return hasAiApiKey(provider);
 }
 
 export function providerMeta(id: AiProviderId) {

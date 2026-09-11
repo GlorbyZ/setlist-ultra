@@ -100,11 +100,23 @@ export function classifyThrown(error: unknown, status?: number): AiError {
   return new AiError(code, message, { status, cause: error });
 }
 
+export function userFacingAssistError(error: unknown, hosted: boolean): string {
+  if (hosted) {
+    const classified = classifyThrown(error);
+    if (classified.code === 'cancelled') return 'Cancelled.';
+    if (classified.code === 'invalid_structure') {
+      return classified.message || 'The assistant returned something we could not use. Your inputs are saved.';
+    }
+    return 'Assistant is temporarily busy.';
+  }
+  return userFacingAiError(error);
+}
+
 export function userFacingAiError(error: unknown): string {
   const classified = classifyThrown(error);
   switch (classified.code) {
     case 'invalid_key':
-      return 'API key was rejected. Check the key for this provider in AI settings.';
+      return 'API key was rejected. Check the key for this provider in Assistant settings.';
     case 'quota':
       return 'Provider quota or billing limit reached.';
     case 'rate_limit':

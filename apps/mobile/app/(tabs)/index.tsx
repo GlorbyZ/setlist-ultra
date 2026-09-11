@@ -18,6 +18,7 @@ import { ActionSheet, BrandDialog } from '@/src/components/BrandDialog';
 import { BrandButton } from '@/src/components/BrandButton';
 import { SearchField } from '@/src/components/SearchField';
 import { SongsDrawer, SongsFilterPanel, type SongListId } from '@/src/components/SongsDrawer';
+import { SongActionSheet } from '@/src/components/SongActionSheet';
 import { SongViewer } from '@/src/components/SongViewer';
 import { UgImportSheet } from '@/src/components/UgImportSheet';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -76,6 +77,8 @@ export default function SongsScreen() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState<'key' | 'tag' | 'artist' | 'source' | null>(null);
   const [dialog, setDialog] = useState<{ title: string; body?: string; songId?: string } | null>(null);
+  const [menuSong, setMenuSong] = useState<SongRow | null>(null);
+  const [addSongId, setAddSongId] = useState<string | null>(null);
   const [importGroup, setImportGroup] = useState<UgSongGroup | null>(null);
   const [wantOnline, setWantOnline] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -327,25 +330,35 @@ export default function SongsScreen() {
               const song = item.song;
               const on = selecting && picked[song.id];
               return (
-                <Pressable
-                  unstable_pressDelay={0}
-                  style={pressedStyle([styles.row, selected?.id === song.id && split && styles.rowOn, on && styles.rowOn])}
-                  onPress={() => {
-                    if (selecting) {
-                      setPicked((prev) => ({ ...prev, [song.id]: !prev[song.id] }));
-                      return;
-                    }
-                    openSong(song);
-                  }}
-                  onLongPress={() => setDialog({ title: song.title, songId: song.id })}>
-                  <Text style={styles.title}>{song.title}</Text>
-                  <Text style={styles.meta}>
-                    {song.artist}
-                    {song.originalKey ? ` · ${song.originalKey}` : ''}
-                    {song.keyShift ? ` · ${song.keyShift > 0 ? '+' : ''}${song.keyShift}` : ''}
-                    {isFavorite(song) ? ' · Fav' : ''}
-                  </Text>
-                </Pressable>
+                <View style={[styles.row, selected?.id === song.id && split && styles.rowOn, on && styles.rowOn]}>
+                  <Pressable
+                    unstable_pressDelay={0}
+                    style={pressedStyle(styles.rowMain)}
+                    onPress={() => {
+                      if (selecting) {
+                        setPicked((prev) => ({ ...prev, [song.id]: !prev[song.id] }));
+                        return;
+                      }
+                      openSong(song);
+                    }}
+                    onLongPress={() => setMenuSong(song)}>
+                    <Text style={styles.title}>{song.title}</Text>
+                    <Text style={styles.meta}>
+                      {song.artist}
+                      {song.originalKey ? ` · ${song.originalKey}` : ''}
+                      {song.keyShift ? ` · ${song.keyShift > 0 ? '+' : ''}${song.keyShift}` : ''}
+                      {isFavorite(song) ? ' · Fav' : ''}
+                    </Text>
+                  </Pressable>
+                  {selecting ? null : (
+                    <Pressable
+                      style={styles.overflow}
+                      onPress={() => setMenuSong(song)}
+                      accessibilityLabel={`Options for ${song.title}`}>
+                      <Ionicons name="ellipsis-vertical" size={18} color={theme.muted} />
+                    </Pressable>
+                  )}
+                </View>
               );
             }}
           />
@@ -428,13 +441,18 @@ export default function SongsScreen() {
       <SetTargetPicker
         visible={setPickerOpen}
         setlists={setlists}
-        onClose={() => setSetPickerOpen(false)}
+        onClose={() => {
+          setSetPickerOpen(false);
+          setAddSongId(null);
+        }}
         onPick={async (setlistId) => {
-          for (const songId of selectedIds) {
+          const ids = addSongId ? [addSongId] : selectedIds;
+          for (const songId of ids) {
             await addSongToSetlist(setlistId, songId);
           }
           setSelecting(false);
           setPicked({});
+          setAddSongId(null);
           await refresh();
           router.push(`/setlist/${setlistId}`);
         }}
@@ -443,15 +461,21 @@ export default function SongsScreen() {
       <BrandDialog
         visible={Boolean(dialog)}
         title={dialog?.title ?? ''}
-        body={dialog?.body ?? 'Favorite, delete, or cancel.'}
+        body={dialog?.body ?? ''}
         onClose={() => setDialog(null)}
         actions={
-          dialog?.title === 'Delete selected songs?'
+          dialog?.title === 'Delete selected songs?' || dialog?.title === 'Delete this song?'
             ? [
                 {
                   label: 'Delete',
                   danger: true,
                   onPress: () => {
+                    if (dialog?.title === 'Delete this song?' && dialog.songId) {
+                      const id = dialog.songId;
+                      setDialog(null);
+                      void deleteSong(id).then(() => refresh());
+                      return;
+                    }
                     const ids = selectedIds.slice();
                     setDialog(null);
                     void deleteSongs(ids).then(async () => {
@@ -463,32 +487,25 @@ export default function SongsScreen() {
                 },
                 { label: 'Cancel', onPress: () => setDialog(null) },
               ]
-            : dialog?.songId
-              ? [
-                  {
-                    label: (() => {
-                      const song = songs.find((s) => s.id === dialog.songId);
-                      return song && isFavorite(song) ? 'Unfavorite' : 'Favorite';
-                    })(),
-                    onPress: () => {
-                      const song = songs.find((s) => s.id === dialog.songId);
-                      if (song) void updateSong(song.id, { tags: toggleFavoriteTags(song) }).then(() => refresh());
-                      setDialog(null);
-                    },
-                  },
-                  {
-                    label: 'Delete',
-                    danger: true,
-                    onPress: () => {
-                      const id = dialog.songId;
-                      setDialog(null);
-                      if (id) void deleteSong(id).then(() => refresh());
-                    },
-                  },
-                  { label: 'Cancel', onPress: () => setDialog(null) },
-                ]
-              : [{ label: 'OK', onPress: () => setDialog(null) }]
+            : [{ label: 'OK', onPress: () => setDialog(null) }]
         }
+      />
+
+      <SongActionSheet
+        song={menuSong}
+        favorite={menuSong ? isFavorite(menuSong) : false}
+        onClose={() => setMenuSong(null)}
+        onOpenLive={(song) => void openSongInLive(router, song.id)}
+        onAddToSet={(song) => {
+          setAddSongId(song.id);
+          setSetPickerOpen(true);
+        }}
+        onSongSettings={(song) => router.push(`/editor/${song.id}` as Href)}
+        onCleanUp={(song) => router.push(`/ai?task=fix-chart&songId=${encodeURIComponent(song.id)}` as Href)}
+        onToggleFavorite={(song) => {
+          void updateSong(song.id, { tags: toggleFavoriteTags(song) }).then(() => refresh());
+        }}
+        onDelete={(song) => setDialog({ title: 'Delete this song?', body: 'Remove it from this library.', songId: song.id })}
       />
     </View>
   );
@@ -590,6 +607,16 @@ function makeStyles(t: AppTheme) {
       marginBottom: 10,
       borderWidth: 1,
       borderColor: t.border,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 8,
+    },
+    rowMain: { flex: 1 },
+    overflow: {
+      width: 44,
+      height: 44,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
     },
     rowOn: { borderColor: t.accent },
     title: { color: t.text, fontSize: t.type.title.fontSize, lineHeight: t.type.title.lineHeight, fontWeight: t.type.title.fontWeight },

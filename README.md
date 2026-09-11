@@ -30,7 +30,7 @@ Full process: **[docs/BUILD.md](docs/BUILD.md)** · Hosted catalog: **[services/
 
 ```bash
 npm run preflight && npm run typecheck && npm test
-git tag v5.0.8 && git push origin v5.0.8
+git tag v5.0.9 && git push origin v5.0.9
 ```
 
 ## Project layout
@@ -40,5 +40,6 @@ git tag v5.0.8 && git push origin v5.0.8
 - `packages/db` — Drizzle + SQLite schema
 - `packages/api` — Supabase client
 - `services/ug-proxy` — Ultimate Guitar import
+- `services/ai-gateway` — Hosted Assist (OpenAI)
 - `services/api` — Hosted SQL
 - `services/manager` — LAN Manager host

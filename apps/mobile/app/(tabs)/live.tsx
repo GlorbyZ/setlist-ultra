@@ -4,6 +4,7 @@ import { ActivityIndicator, AppState, Pressable, View } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Text } from '@/components/Themed';
 import { BrandButton } from '@/src/components/BrandButton';
+import { ActionSheet } from '@/src/components/BrandDialog';
 import { LiveChrome } from '@/src/components/LiveChrome';
 import { LiveSongPage } from '@/src/components/LiveSongPage';
 import { SetlistQuickAccess } from '@/src/components/SetlistQuickAccess';
@@ -51,6 +52,7 @@ export default function LiveTab() {
   const [capo, setCapo] = useState(0);
   const [scrolling, setScrolling] = useState(false);
   const [setlistOpen, setSetlistOpen] = useState(false);
+  const [songMenuOpen, setSongMenuOpen] = useState(false);
   const viewerRef = useRef<SongViewerHandle>(null);
   const audioSource = launchFlags.audio && song?.linkedAudio ? { uri: song.linkedAudio } : undefined;
   const audioPlayer = useAudioPlayer(audioSource);
@@ -272,6 +274,7 @@ export default function LiveTab() {
         onCapo={song ? (d) => changeCapo(wrapCapo(capo, d)) : undefined}
         onCapoPick={song ? (n) => changeCapo(n) : undefined}
         onEdit={song ? () => router.push(('/editor/' + song.id) as Href) : undefined}
+        onSongMenu={song ? () => setSongMenuOpen(true) : undefined}
         onPrev={prev ? () => go(-1) : undefined}
         onNext={next ? () => go(1) : undefined}
         onTranspose={song ? (d) => changeKeyShift(keyShift + d) : undefined}
@@ -306,6 +309,26 @@ export default function LiveTab() {
           entries={queue}
           currentKey={entry.key}
           onSelect={(_key, songIndex) => goTo(songIndex)}
+        />
+      ) : null}
+
+      {song ? (
+        <ActionSheet
+          visible={songMenuOpen}
+          title={song.title}
+          onClose={() => setSongMenuOpen(false)}
+          options={[
+            { label: 'Song Settings', onPress: () => router.push(('/editor/' + song.id) as Href) },
+            ...(launchFlags.ai
+              ? [
+                  {
+                    label: 'Clean Up Chart',
+                    onPress: () =>
+                      router.push(`/ai?task=fix-chart&songId=${encodeURIComponent(song.id)}` as Href),
+                  },
+                ]
+              : []),
+          ]}
         />
       ) : null}
     </View>

@@ -7,8 +7,11 @@ import {
   AI_PROVIDERS,
   getAiApiKey,
   getAiProvider,
+  getPreferByok,
   setAiApiKey,
   setAiProvider,
+  setPreferByok,
+  shouldUseHostedGateway,
   type AiProviderId,
 } from '@/src/lib/ai';
 import { useTheme, useThemedStyles, type AppTheme } from '@/src/theme';
@@ -25,6 +28,8 @@ export function AiSettingsPanel({ onSaved, compact }: Props) {
   const [provider, setProvider] = useState<AiProviderId>('gemini');
   const [apiKey, setApiKey] = useState('');
   const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [preferByok, setPreferByokState] = useState(false);
+  const [hosted, setHosted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -34,6 +39,8 @@ export function AiSettingsPanel({ onSaved, compact }: Props) {
     const key = await getAiApiKey(id);
     setHasStoredKey(Boolean(key));
     setApiKey('');
+    setPreferByokState(await getPreferByok());
+    setHosted(shouldUseHostedGateway());
   }, []);
 
   useEffect(() => {
@@ -88,46 +95,71 @@ export function AiSettingsPanel({ onSaved, compact }: Props) {
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
-      <Text style={styles.heading}>AI provider (BYOK)</Text>
+      <Text style={styles.heading}>Assistant</Text>
       <Text style={styles.hint}>
-        Ultra stores your key in SecureStore on this device only. We never host a shared model key.
+        {hosted
+          ? preferByok
+            ? 'Using your own API key. Turn this off to use the hosted assistant.'
+            : 'Setlist Ultra hosts the assistant. Charts stay on this device until you Apply. Your own key is optional.'
+          : 'Ultra stores your key in SecureStore on this device only. Hosted assistant is not configured in this build.'}
       </Text>
 
-      <View style={styles.row}>
-        {AI_PROVIDERS.map((p) => {
-          const active = p.id === provider;
-          return (
-            <Pressable
-              key={p.id}
-              onPress={() => void onPickProvider(p.id)}
-              style={[styles.chip, active && styles.chipActive]}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{p.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={styles.label}>
-        {meta.label} API key{hasStoredKey ? ' (saved — paste to replace)' : ''}
-      </Text>
-      <TextInput
-        value={apiKey}
-        onChangeText={setApiKey}
-        autoCapitalize="none"
-        autoCorrect={false}
-        secureTextEntry
-        placeholder={hasStoredKey ? '•••••••• (unchanged)' : meta.keyHint}
-        placeholderTextColor={theme.faint}
-        style={styles.input}
-      />
-
-      <BrandButton label="Save key" busy={busy} onPress={() => void onSave()} compact />
-      {hasStoredKey ? (
-        <Pressable style={styles.ghost} disabled={busy} onPress={() => void onClear()}>
-          <Text style={styles.ghostText}>Clear saved key</Text>
+      {hosted ? (
+        <Pressable
+          onPress={() => {
+            const next = !preferByok;
+            setPreferByokState(next);
+            void setPreferByok(next);
+            onSaved?.();
+          }}
+          style={[styles.chip, preferByok && styles.chipActive]}>
+          <Text style={[styles.chipText, preferByok && styles.chipTextActive]}>Use my own API key</Text>
         </Pressable>
       ) : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+
+      {status && hosted && !preferByok ? <Text style={styles.status}>{status}</Text> : null}
+
+      {!hosted || preferByok ? (
+        <>
+          <Text style={styles.heading}>Provider (BYOK)</Text>
+
+          <View style={styles.row}>
+            {AI_PROVIDERS.map((p) => {
+              const active = p.id === provider;
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => void onPickProvider(p.id)}
+                  style={[styles.chip, active && styles.chipActive]}>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{p.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.label}>
+            {meta.label} API key{hasStoredKey ? ' (saved — paste to replace)' : ''}
+          </Text>
+          <TextInput
+            value={apiKey}
+            onChangeText={setApiKey}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            placeholder={hasStoredKey ? '•••••••• (unchanged)' : meta.keyHint}
+            placeholderTextColor={theme.faint}
+            style={styles.input}
+          />
+
+          <BrandButton label="Save key" busy={busy} onPress={() => void onSave()} compact />
+          {hasStoredKey ? (
+            <Pressable style={styles.ghost} disabled={busy} onPress={() => void onClear()}>
+              <Text style={styles.ghostText}>Clear saved key</Text>
+            </Pressable>
+          ) : null}
+          {status ? <Text style={styles.status}>{status}</Text> : null}
+        </>
+      ) : null}
     </View>
   );
 }
@@ -153,6 +185,8 @@ function makeStyles(t: AppTheme) {
       paddingHorizontal: 12,
       paddingVertical: 8,
       backgroundColor: t.bg,
+      marginBottom: 12,
+      alignSelf: 'flex-start' as const,
     },
     chipActive: { borderColor: t.accent, backgroundColor: t.bg },
     chipText: { color: t.muted, fontWeight: '600' as const, fontSize: 13 },

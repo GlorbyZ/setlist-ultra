@@ -21,6 +21,7 @@ type Props = {
   onCapoPick?: (capo: number) => void;
   capo?: number;
   onEdit?: () => void;
+  onSongMenu?: () => void;
   onPedal?: (action: PedalAction) => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -49,6 +50,7 @@ export function LiveChrome({
   onCapoPick,
   capo = 0,
   onEdit,
+  onSongMenu,
   onPedal,
   onPrev,
   onNext,
@@ -206,6 +208,7 @@ export function LiveChrome({
                 {onPrev ? toolBtn('Prev', onPrev) : null}
                 {onNext ? toolBtn('Next', onNext) : null}
                 {onEdit ? toolBtn('Edit', onEdit) : null}
+                {onSongMenu ? toolBtn('Song', onSongMenu) : null}
                 <PressableScale style={styles.tool} scaleTo={0.94} onPress={() => setOpen(false)}>
                   <Text style={styles.toolText}>Done</Text>
                 </PressableScale>

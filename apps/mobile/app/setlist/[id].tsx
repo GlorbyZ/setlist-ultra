@@ -298,7 +298,7 @@ export default function SetlistScreen() {
 function itemLabel(item: SetlistItemRow, songsById: Record<string, SongRow>) {
   if (item.itemType === 'note') return item.noteContent?.trim() || 'Note';
   if (item.itemType === 'timer') return `${item.timerSeconds}s break`;
-  return songsById[item.songId ?? '']?.title ?? 'Song';
+  return songsById[item.songId ?? '']?.title ?? 'Missing from library';
 }
 
 function itemSubtitle(item: SetlistItemRow, songsById: Record<string, SongRow>) {

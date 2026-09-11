@@ -56,63 +56,6 @@ function TabIcon({
   );
 }
 
-/** Raised center AI tab — brand gradient pill between Sets and Live. */
-function RaisedAiTabIcon({
-  size,
-  focused,
-}: {
-  color: ColorValue;
-  size: number;
-  focused: boolean;
-}) {
-  const { theme } = useTheme();
-  const reduce = useReduceMotion();
-  const scale = useSharedValue(1);
-  useEffect(() => {
-    if (reduce) {
-      scale.value = 1;
-      return;
-    }
-    scale.value = withSpring(focused ? 1.06 : 1, PRESS_SPRING);
-  }, [focused, reduce, scale]);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-  return (
-    <Animated.View style={[{ alignItems: 'center', marginTop: -14, width: 64 }, anim]}>
-      <LinearGradient
-        colors={[...theme.gradient]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 2,
-          borderColor: theme.bg,
-          shadowColor: '#000',
-          shadowOpacity: 0.25,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: 3 },
-          elevation: 6,
-        }}>
-        <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={size + 4} color="#FFFFFF" />
-      </LinearGradient>
-      {focused ? (
-        <LinearGradient
-          colors={[...theme.gradient]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ marginTop: 4, height: 2, width: 22, borderRadius: 1 }}
-        />
-      ) : (
-        <View style={{ marginTop: 4, height: 2, width: 22 }} />
-      )}
-    </Animated.View>
-  );
-}
-
 export default function TabLayout() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -166,11 +109,11 @@ export default function TabLayout() {
         <Tabs.Screen
           name="ai"
           options={{
-            title: 'AI',
-            tabBarLabel: 'AI',
+            title: 'Assist',
+            tabBarLabel: 'Assist',
             href: launchFlags.ai ? undefined : null,
             tabBarIcon: ({ color, size, focused }) => (
-              <RaisedAiTabIcon color={color} size={size} focused={focused} />
+              <TabIcon name="sparkles-outline" color={color} size={size} focused={focused} />
             ),
           }}
         />

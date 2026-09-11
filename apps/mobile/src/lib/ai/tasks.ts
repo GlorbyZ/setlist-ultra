@@ -32,6 +32,7 @@ export type AiTaskInput = {
   maxInputChars?: number;
   maxOutputTokens?: number;
   allowModelFallback?: boolean;
+  preferByok?: boolean;
   requestId?: string;
 };
 
@@ -42,6 +43,7 @@ export type AiTaskResult = {
   model: string;
   usedFallback: boolean;
   truncated: boolean;
+  hosted: boolean;
   text: string;
   proposal: ValidatedProposal | null;
   envelope: ProposalEnvelope | null;
@@ -106,9 +108,10 @@ export async function runAiTask(input: AiTaskInput): Promise<AiTaskResult> {
     allowModelFallback,
     requireComplete: input.taskType !== 'chat',
     temperature: input.taskType === 'chat' ? 0.7 : 0.2,
+    preferByok: input.preferByok,
   });
 
-  if (completion.provider !== input.provider) {
+  if (!completion.hosted && completion.provider !== input.provider) {
     throw new AiError('unknown', 'Provider switched without consent.');
   }
 
@@ -152,6 +155,7 @@ export async function runAiTask(input: AiTaskInput): Promise<AiTaskResult> {
     model: completion.model,
     usedFallback: Boolean(completion.usedFallback),
     truncated: Boolean(completion.truncated),
+    hosted: Boolean(completion.hosted),
     text: completion.text,
     proposal,
     envelope,
